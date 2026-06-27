@@ -13,4 +13,4 @@ def health() -> dict[str, str]:
 
 @app.post("/runs", response_model=RunResult, response_model_by_alias=True)
 def create_run(req: IntentRequest) -> RunResult:
-    return _run_service.execute(req.intent, req.project_id)
+    return _run_service.execute(req.intent, req.project_id, req.repo_path or "")
