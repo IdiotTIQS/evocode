@@ -34,8 +34,11 @@ export default function Home() {
         <section style={{ marginTop: 24 }}>
           <p>Run <code>{result.runId}</code> — {result.status} ({result.phase})</p>
           <p>{result.message}</p>
-          {result.graphStats && (
-            <p>项目图：{result.graphStats.fileCount} 文件 / {result.graphStats.componentCount} 组件 / {result.graphStats.importCount} import</p>
+          {result?.graphStats && (
+            <p>项目图：{result.graphStats.fileCount} 文件 / {result.graphStats.componentCount} 组件 / {result.graphStats.importCount} import
+              {result.graphStats.cacheHit ? "（缓存命中）" : "（新抽取）"}
+              {result.graphStats.graphVersionId != null ? ` v${result.graphStats.graphVersionId}` : ""}
+            </p>
           )}
           <ul>
             {result.taskGraph.tasks.map((t) => (

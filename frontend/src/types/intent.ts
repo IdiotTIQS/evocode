@@ -22,6 +22,8 @@ export interface ProjectGraphStats {
   fileCount: number;
   componentCount: number;
   importCount: number;
+  cacheHit?: boolean;
+  graphVersionId?: number | null;
 }
 
 export interface RunResult {
