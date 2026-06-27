@@ -4,8 +4,23 @@ export interface IntentRequest {
   projectId: string;
 }
 
-export interface RunAcknowledgement {
+export type TaskKind = "frontend" | "backend" | "test" | "generic";
+
+export interface EngineeringTask {
+  id: string;
+  title: string;
+  kind: TaskKind;
+  description: string;
+}
+
+export interface TaskGraph {
+  tasks: EngineeringTask[];
+}
+
+export interface RunResult {
   runId: string;
-  status: "accepted" | "rejected";
+  status: "completed" | "failed";
+  phase: string;
+  taskGraph: TaskGraph;
   message: string;
 }

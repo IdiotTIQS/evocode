@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { submitIntent } from "@/lib/api";
-import type { RunAcknowledgement } from "@/types/intent";
+import type { RunResult } from "@/types/intent";
 
 export default function Home() {
   const [intent, setIntent] = useState("");
   const [projectId, setProjectId] = useState("demo");
-  const [result, setResult] = useState<RunAcknowledgement | null>(null);
+  const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -28,7 +28,19 @@ export default function Home() {
         <textarea value={intent} onChange={(e) => setIntent(e.target.value)} placeholder="Describe your intent..." rows={4} style={{ width: "100%" }} />
         <button type="submit" disabled={!intent}>Submit Intent</button>
       </form>
-      {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
+      {result && (
+        <section style={{ marginTop: 24 }}>
+          <p>Run <code>{result.runId}</code> — {result.status} ({result.phase})</p>
+          <p>{result.message}</p>
+          <ul>
+            {result.taskGraph.tasks.map((t) => (
+              <li key={t.id}>
+                <strong>[{t.kind}]</strong> {t.title} — {t.description}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {error && <p style={{ color: "red" }}>{error}</p>}
     </main>
   );
