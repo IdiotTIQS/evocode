@@ -38,31 +38,55 @@ EvoCode is a four-layer agent-driven software engineering platform that enables 
 
 ### Startup Order
 
-Start services in this order to ensure proper initialization:
+Start services in this order to ensure proper initialization. These are the exact
+commands verified end-to-end for increment 0 (Windows paths shown for the venv;
+on macOS/Linux use `.venv/bin/...`).
 
 1. **Python AI Runtime** (Port 8000)
    ```bash
    cd ai-runtime
-   python -m evocode_runtime
+   python -m venv .venv
+   .venv/Scripts/python -m pip install -e ".[dev]"
+   .venv/Scripts/python -m uvicorn evocode_runtime.main:app --port 8000
    ```
 
 2. **Spring Boot Control Plane** (Port 8080)
    ```bash
    cd control-plane
-   ./mvnw spring-boot:run
+   mvn spring-boot:run
    ```
 
 3. **Frontend Console** (Port 3000)
    ```bash
    cd frontend
-   npm run dev
+   pnpm install
+   pnpm dev
    ```
+
+### Verified End-to-End Check
+
+With the Python runtime and Spring Boot control plane running, submit an intent
+through the gateway. The request is forwarded to the Python runtime and a stubbed
+run acknowledgement is returned:
+
+```bash
+curl -X POST http://localhost:8080/api/intents \
+  -H "Content-Type: application/json" \
+  -d '{"intent":"add a contact page","projectId":"demo"}'
+# → {"runId":"<uuid>","status":"accepted","message":"Run accepted for project demo"}
+
+curl http://localhost:8080/actuator/health   # → {"status":"UP"}
+curl http://localhost:8000/health            # → {"status":"ok"}
+```
+
+A blank `intent` is rejected by the control plane with HTTP 400 (bean validation).
 
 ### Prerequisites
 
-- Python 3.10+
-- Java 17+
-- Node.js 18+
+- Python 3.11 (the runtime is pinned to 3.11; use a venv as shown above)
+- JDK 21
+- Node.js 22 + pnpm 10
+- Maven 3.9
 - Git
 
 ## Cross-Layer Contracts
