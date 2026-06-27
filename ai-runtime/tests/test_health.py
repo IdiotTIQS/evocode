@@ -10,10 +10,12 @@ def test_health_ok():
     assert resp.json() == {"status": "ok"}
 
 
-def test_create_run_returns_accepted():
+def test_create_run_returns_taskgraph():
     resp = client.post("/runs", json={"intent": "add a contact page", "projectId": "demo"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["status"] == "accepted"
+    assert body["status"] == "completed"
     assert body["runId"]
-    assert "demo" in body["message"]
+    assert "taskGraph" in body
+    assert len(body["taskGraph"]["tasks"]) >= 1
+    assert any(t["kind"] == "frontend" for t in body["taskGraph"]["tasks"])

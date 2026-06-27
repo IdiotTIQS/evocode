@@ -2,7 +2,7 @@ package com.evocode.controlplane.api;
 
 import com.evocode.controlplane.client.PythonRuntimeClient;
 import com.evocode.controlplane.dto.IntentRequest;
-import com.evocode.controlplane.dto.RunAcknowledgement;
+import com.evocode.controlplane.dto.RunResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,7 +20,7 @@ public class IntentController {
     }
 
     @PostMapping
-    public RunAcknowledgement submit(@Valid @RequestBody IntentRequest request) {
+    public RunResult submit(@Valid @RequestBody IntentRequest request) {
         // 增量 0：直转 Python 运行时。后续此处接入编排/鉴权/RBAC。
         return runtimeClient.createRun(request);
     }

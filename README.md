@@ -66,20 +66,28 @@ on macOS/Linux use `.venv/bin/...`).
 ### Verified End-to-End Check
 
 With the Python runtime and Spring Boot control plane running, submit an intent
-through the gateway. The request is forwarded to the Python runtime and a stubbed
-run acknowledgement is returned:
+through the gateway. The request is forwarded to the Python runtime, which runs a
+LangGraph `understand → plan` pipeline and returns a real planned `TaskGraph`:
 
 ```bash
 curl -X POST http://localhost:8080/api/intents \
   -H "Content-Type: application/json" \
-  -d '{"intent":"add a contact page","projectId":"demo"}'
-# → {"runId":"<uuid>","status":"accepted","message":"Run accepted for project demo"}
+  -d '{"intent":"add a comments api and a product page","projectId":"shop"}'
+# → {"runId":"<uuid>","status":"completed","phase":"planned",
+#    "taskGraph":{"tasks":[
+#      {"id":"task-1","title":"实现前端界面","kind":"frontend",...},
+#      {"id":"task-2","title":"实现后端 API","kind":"backend",...},
+#      {"id":"task-3","title":"编写测试","kind":"test",...}]},
+#    "message":"Planned 3 task(s) for project shop"}
 
 curl http://localhost:8080/actuator/health   # → {"status":"UP"}
 curl http://localhost:8000/health            # → {"status":"ok"}
 ```
 
-A blank `intent` is rejected by the control plane with HTTP 400 (bean validation).
+The Planner uses a deterministic stub LLM by default (no credentials needed). Set
+`OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
+runtime to an OpenAI-compatible provider. A blank `intent` is rejected by the
+control plane with HTTP 400 (bean validation).
 
 ### Prerequisites
 
