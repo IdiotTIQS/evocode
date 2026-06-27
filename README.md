@@ -127,6 +127,23 @@ stored, and prior versions are marked superseded (never deleted). The SQLite fil
 lives at `ai-runtime/data/pkg.db` (gitignored). A Postgres-backed `GraphStore`
 can replace SQLite behind the same interface without touching callers.
 
+#### Impact / dependency analysis
+
+`understand` runs impact/dependency analysis over the graph's IMPORTS edges
+(transitive reachability, both directions). `graphStats.maxImpactCount` reports
+the largest blast radius in the project — the number of files transitively
+affected if the most-depended-on file changed — and the Planner folds that signal
+into its task descriptions:
+
+```bash
+# → {..., "graphStats":{"fileCount":4,"componentCount":4,"importCount":2,"maxImpactCount":1}}
+#   frontend task: "...（项目现有 4 个组件）（最大影响面 1 文件）"
+```
+
+The analysis distinguishes `dependencies_of` (what a file transitively imports)
+from `impact_of` (who transitively imports it — what breaks if it changes), is
+cycle-safe (a file is never its own dependency), and is fully deterministic.
+
 The Planner uses a deterministic stub LLM by default (no credentials needed). Set
 `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
 runtime to an OpenAI-compatible provider. A blank `intent` is rejected by the

@@ -38,6 +38,7 @@ export default function Home() {
             <p>项目图：{result.graphStats.fileCount} 文件 / {result.graphStats.componentCount} 组件 / {result.graphStats.importCount} import
               {result.graphStats.cacheHit ? "（缓存命中）" : "（新抽取）"}
               {result.graphStats.graphVersionId != null ? ` v${result.graphStats.graphVersionId}` : ""}
+              {" · 最大影响面 "}{result.graphStats.maxImpactCount ?? 0}{" 文件"}
             </p>
           )}
           <ul>

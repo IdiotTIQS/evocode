@@ -19,7 +19,8 @@
         "componentCount": { "type": "integer" },
         "importCount": { "type": "integer" },
         "cacheHit": { "type": "boolean" },
-        "graphVersionId": { "type": ["integer", "null"] }
+        "graphVersionId": { "type": ["integer", "null"] },
+        "maxImpactCount": { "type": "integer" }
       }
     },
     "EngineeringTask": {

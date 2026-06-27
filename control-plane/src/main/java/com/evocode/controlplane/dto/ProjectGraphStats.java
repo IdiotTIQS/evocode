@@ -5,5 +5,6 @@ public record ProjectGraphStats(
     int componentCount,
     int importCount,
     Boolean cacheHit,
-    Integer graphVersionId
+    Integer graphVersionId,
+    Integer maxImpactCount
 ) {}

@@ -27,6 +27,7 @@ class ProjectGraphStats(BaseModel):
     import_count: int = Field(alias="importCount")
     cache_hit: bool = Field(default=False, alias="cacheHit")
     graph_version_id: int | None = Field(default=None, alias="graphVersionId")
+    max_impact_count: int = Field(default=0, alias="maxImpactCount")
 
 
 class RunResult(BaseModel):

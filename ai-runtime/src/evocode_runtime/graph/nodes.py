@@ -8,7 +8,7 @@ from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
 logger = logging.getLogger(__name__)
 
 _PLACEHOLDER_STATS = {"fileCount": 0, "componentCount": 0, "importCount": 0,
-                      "cacheHit": False, "graphVersionId": None}
+                      "cacheHit": False, "graphVersionId": None, "maxImpactCount": 0}
 
 
 def _db_path() -> str:
@@ -44,7 +44,10 @@ def understand_node(state: RunState) -> dict:
             try:
                 graph = store.load_graph(vid)
                 pg = ProjectGraph(graph["nodes"], graph["edges"])
-                return {"context": pg.to_context(project_id, {"cacheHit": True, "graphVersionId": vid}),
+                summary = pg.analysis_summary()
+                return {"context": pg.to_context(project_id,
+                            {"cacheHit": True, "graphVersionId": vid,
+                             "maxImpactCount": summary["maxImpactCount"]}),
                         "phase": "understood"}
             except Exception:  # noqa: BLE001  缓存命中但读取失败 → 退化为重新抽取
                 logger.warning("understand_node: load_graph failed for project %s vid %s, falling through to extraction",
@@ -59,7 +62,10 @@ def understand_node(state: RunState) -> dict:
             except Exception:  # noqa: BLE001  存失败不影响本次结果
                 new_vid = None
         pg = ProjectGraph(raw["nodes"], raw["edges"])
-        return {"context": pg.to_context(project_id, {"cacheHit": False, "graphVersionId": new_vid}),
+        summary = pg.analysis_summary()
+        return {"context": pg.to_context(project_id,
+                    {"cacheHit": False, "graphVersionId": new_vid,
+                     "maxImpactCount": summary["maxImpactCount"]}),
                 "phase": "understood"}
     except ExtractionError:
         return _placeholder(project_id)
