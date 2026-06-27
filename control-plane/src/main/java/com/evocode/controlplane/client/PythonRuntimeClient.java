@@ -4,6 +4,7 @@ import com.evocode.controlplane.dto.IntentRequest;
 import com.evocode.controlplane.dto.RunAcknowledgement;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -13,7 +14,10 @@ public class PythonRuntimeClient {
     private final RestClient restClient;
 
     public PythonRuntimeClient(@Value("${python.runtime.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        this.restClient = RestClient.builder()
+            .baseUrl(baseUrl)
+            .requestFactory(new SimpleClientHttpRequestFactory())
+            .build();
     }
 
     public RunAcknowledgement createRun(IntentRequest request) {
