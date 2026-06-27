@@ -5,5 +5,6 @@ public record RunResult(
     String status,
     String phase,
     TaskGraph taskGraph,
+    ProjectGraphStats graphStats,
     String message
 ) {}
