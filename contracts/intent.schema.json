@@ -10,12 +10,31 @@
         "projectId": { "type": "string", "minLength": 1 }
       }
     },
-    "RunAcknowledgement": {
+    "EngineeringTask": {
       "type": "object",
-      "required": ["runId", "status", "message"],
+      "required": ["id", "title", "kind", "description"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["frontend", "backend", "test", "generic"] },
+        "description": { "type": "string" }
+      }
+    },
+    "TaskGraph": {
+      "type": "object",
+      "required": ["tasks"],
+      "properties": {
+        "tasks": { "type": "array", "items": { "$ref": "#/definitions/EngineeringTask" } }
+      }
+    },
+    "RunResult": {
+      "type": "object",
+      "required": ["runId", "status", "phase", "taskGraph", "message"],
       "properties": {
         "runId": { "type": "string", "format": "uuid" },
-        "status": { "type": "string", "enum": ["accepted", "rejected"] },
+        "status": { "type": "string", "enum": ["completed", "failed"] },
+        "phase": { "type": "string" },
+        "taskGraph": { "$ref": "#/definitions/TaskGraph" },
         "message": { "type": "string" }
       }
     }

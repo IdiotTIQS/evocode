@@ -4,10 +4,12 @@ This directory is the single source of truth for cross-layer contracts.
 
 ## Intent Contract
 
-The `intent.schema.json` file defines two core schemas used across all four layers of the EvoCode platform:
+The `intent.schema.json` file defines core schemas used across all four layers of the EvoCode platform:
 
 - **IntentRequest**: Represents a user intent with a required description and project identifier
-- **RunAcknowledgement**: Represents the acknowledgement of a run with a unique identifier, status, and message
+- **EngineeringTask**: Represents a discrete engineering task with id, title, kind, and description
+- **TaskGraph**: Represents a collection of engineering tasks to be executed
+- **RunResult**: Represents the result of a run with unique identifier, status, phase, task graph, and message
 
 ## Mirrored Locations
 
