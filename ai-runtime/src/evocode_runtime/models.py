@@ -25,6 +25,8 @@ class ProjectGraphStats(BaseModel):
     file_count: int = Field(alias="fileCount")
     component_count: int = Field(alias="componentCount")
     import_count: int = Field(alias="importCount")
+    cache_hit: bool = Field(default=False, alias="cacheHit")
+    graph_version_id: int | None = Field(default=None, alias="graphVersionId")
 
 
 class RunResult(BaseModel):

@@ -22,9 +22,12 @@ class ProjectGraph:
             "importCount": sum(1 for e in self._edges if e.get("type") == "IMPORTS"),
         }
 
-    def to_context(self, project_id: str) -> dict:
+    def to_context(self, project_id: str, extra_stats: dict | None = None) -> dict:
+        stats = self.stats()
+        if extra_stats:
+            stats.update(extra_stats)
         return {
             "projectId": project_id,
             "graph": {"nodes": self._nodes, "edges": self._edges},
-            "stats": self.stats(),
+            "stats": stats,
         }
