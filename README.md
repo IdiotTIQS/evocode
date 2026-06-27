@@ -89,6 +89,14 @@ A blank `intent` is rejected by the control plane with HTTP 400 (bean validation
 - Maven 3.9
 - Git
 
+### Security Note (Increment 0)
+
+Increment 0 has **no authentication** on the control plane or the Python runtime.
+Bind both services to `localhost` only and do not expose them to a network.
+The Spring Boot control plane is the designated enterprise/auth layer —
+authentication, RBAC, and a tightened CORS policy land in a later increment
+before any non-local deployment.
+
 ## Cross-Layer Contracts
 
 All layers adhere to the contract definitions in the `contracts/` directory. These schemas define:
