@@ -106,6 +106,27 @@ Without `repoPath` (or if Node/the extractor is unavailable), `understand` falls
 back to an empty placeholder graph (`graphStats` all zero) and planning proceeds
 from the intent text alone — no failure.
 
+#### Persistent graph cache
+
+The extracted graph is persisted (SQLite, behind a `GraphStore` interface) and
+versioned by a repo fingerprint (file mtimes + sizes). When the same project's
+repo is unchanged, `understand` loads the stored graph instead of re-extracting —
+`graphStats.cacheHit` reports which path was taken and `graphVersionId` identifies
+the stored version:
+
+```bash
+# First call for an unchanged repo → extracts and stores
+# → {..., "graphStats":{"fileCount":4,...,"cacheHit":false,"graphVersionId":1}}
+
+# Second identical call → served from the store, no re-extraction
+# → {..., "graphStats":{"fileCount":4,...,"cacheHit":true,"graphVersionId":1}}
+```
+
+When the repo changes, the fingerprint differs, a new version is extracted and
+stored, and prior versions are marked superseded (never deleted). The SQLite file
+lives at `ai-runtime/data/pkg.db` (gitignored). A Postgres-backed `GraphStore`
+can replace SQLite behind the same interface without touching callers.
+
 The Planner uses a deterministic stub LLM by default (no credentials needed). Set
 `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
 runtime to an OpenAI-compatible provider. A blank `intent` is rejected by the
