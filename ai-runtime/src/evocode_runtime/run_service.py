@@ -1,6 +1,9 @@
+import logging
 from uuid import uuid4
 from evocode_runtime.graph import build_graph
 from evocode_runtime.models import RunResult, TaskGraph, EngineeringTask, ProjectGraphStats
+
+logger = logging.getLogger(__name__)
 
 _graph = build_graph()
 
@@ -27,6 +30,7 @@ class RunService:
                 taskGraph=TaskGraph(tasks=tasks), graphStats=gs,
                 message=f"Planned {len(tasks)} task(s) for project {project_id}")
         except Exception:  # noqa: BLE001
+            logger.exception("run %s failed", run_id)
             return RunResult(
                 runId=run_id, status="failed", phase="failed",
                 taskGraph=TaskGraph(tasks=[]), graph_stats=None,

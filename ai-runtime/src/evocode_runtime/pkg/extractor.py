@@ -45,6 +45,18 @@ class TsExtractor:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             raise ExtractionError(f"extractor failed: {exc}") from exc
         try:
-            return json.loads(proc.stdout)
+            parsed = json.loads(proc.stdout)
         except json.JSONDecodeError as exc:
             raise ExtractionError(f"invalid extractor output: {exc}") from exc
+        _validate_graph(parsed)
+        return parsed
+
+
+def _validate_graph(obj: object) -> None:
+    """Raise ExtractionError if *obj* is not a well-formed graph dict."""
+    if not isinstance(obj, dict):
+        raise ExtractionError("unexpected extractor output shape")
+    if "nodes" not in obj or "edges" not in obj:
+        raise ExtractionError("unexpected extractor output shape")
+    if not isinstance(obj["nodes"], list) or not isinstance(obj["edges"], list):
+        raise ExtractionError("unexpected extractor output shape")

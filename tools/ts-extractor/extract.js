@@ -29,6 +29,8 @@ const project = new Project({
 project.addSourceFilesAtPaths([
   path.join(targetDir, "**/*.ts"),
   path.join(targetDir, "**/*.tsx"),
+  "!" + targetDir.replace(/\\/g, "/") + "/**/node_modules/**",
+  "!" + targetDir.replace(/\\/g, "/") + "/**/*.d.ts",
 ]);
 
 const nodes = [];
