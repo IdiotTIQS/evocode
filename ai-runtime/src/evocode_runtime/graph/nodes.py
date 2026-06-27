@@ -4,6 +4,8 @@ from evocode_runtime.graph.state import RunState
 from evocode_runtime.llm import get_llm_gateway
 from evocode_runtime.pkg import TsExtractor, ProjectGraph, ExtractionError
 from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
+from evocode_runtime.pkg import TsVerifier, VerificationError
+from evocode_runtime.codegen import generate_change_set, apply_change_set
 
 logger = logging.getLogger(__name__)
 
@@ -78,3 +80,49 @@ def plan_node(state: RunState) -> dict:
     gateway = get_llm_gateway()
     tasks = gateway.plan(state["intent"], state.get("context") or {})
     return {"tasks": [t.model_dump() for t in tasks], "phase": "planned"}
+
+
+def generate_node(state: RunState) -> dict:
+    """把任务物化为真实代码文件，写入目标 repo 的 evocode_generated/ 子目录。
+
+    这是 "agents modify systems" 的落地环节。无 repoPath 时仍生成 changeSet
+    （内容可见）但不落盘。绝不让 /runs 失败。"""
+    intent = state["intent"]
+    tasks = state.get("tasks") or []
+    repo_path = state.get("repoPath") or ""
+    try:
+        change_set = generate_change_set(tasks, intent)
+    except Exception:  # noqa: BLE001
+        logger.exception("generate_node failed to build change set for project %s",
+                          state.get("projectId"))
+        return {"changeSet": [], "applied": [], "phase": "generated"}
+    applied: list[str] = []
+    if repo_path and os.path.isdir(repo_path):
+        try:
+            applied = apply_change_set(repo_path, change_set)
+        except Exception:  # noqa: BLE001  写盘失败不影响 changeSet 返回
+            logger.exception("generate_node failed to apply change set to %s", repo_path)
+            applied = []
+    return {"changeSet": change_set, "applied": applied, "phase": "generated"}
+
+
+def verify_node(state: RunState) -> dict:
+    """对目标 repo（含刚生成的文件）跑只读静态类型检查，产出现实裁定。"""
+    repo_path = state.get("repoPath") or ""
+    not_checked = {"checked": False, "passed": False, "diagnosticCount": 0, "diagnostics": []}
+    if not (repo_path and os.path.isdir(repo_path)):
+        return {"verification": not_checked, "phase": "verified"}
+    verifier = TsVerifier()
+    if not verifier.is_available():
+        return {"verification": not_checked, "phase": "verified"}
+    try:
+        res = verifier.check(repo_path)
+        return {"verification": {
+            "checked": True, "passed": res["passed"],
+            "diagnosticCount": res["diagnosticCount"],
+            "diagnostics": res["diagnostics"][:20]}, "phase": "verified"}
+    except VerificationError:
+        return {"verification": not_checked, "phase": "verified"}
+    except Exception:  # noqa: BLE001  绝不让 verify 拖垮 /runs
+        logger.exception("verify_node failed for project %s", state.get("projectId"))
+        return {"verification": not_checked, "phase": "verified"}
