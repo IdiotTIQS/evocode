@@ -1,0 +1,16 @@
+# Node
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+# Java
+target/
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Env
+.env
+# OS
+.DS_Store
