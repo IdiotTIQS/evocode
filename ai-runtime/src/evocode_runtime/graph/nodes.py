@@ -1,8 +1,11 @@
+import logging
 import os
 from evocode_runtime.graph.state import RunState
 from evocode_runtime.llm import get_llm_gateway
 from evocode_runtime.pkg import TsExtractor, ProjectGraph, ExtractionError
 from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
+
+logger = logging.getLogger(__name__)
 
 _PLACEHOLDER_STATS = {"fileCount": 0, "componentCount": 0, "importCount": 0,
                       "cacheHit": False, "graphVersionId": None}
@@ -38,11 +41,16 @@ def understand_node(state: RunState) -> dict:
         except Exception:  # noqa: BLE001  DB 不可用 → 退化为不缓存
             store, vid = None, None
         if store is not None and vid is not None:
-            graph = store.load_graph(vid)
-            pg = ProjectGraph(graph["nodes"], graph["edges"])
-            return {"context": pg.to_context(project_id, {"cacheHit": True, "graphVersionId": vid}),
-                    "phase": "understood"}
-        # miss：抽取
+            try:
+                graph = store.load_graph(vid)
+                pg = ProjectGraph(graph["nodes"], graph["edges"])
+                return {"context": pg.to_context(project_id, {"cacheHit": True, "graphVersionId": vid}),
+                        "phase": "understood"}
+            except Exception:  # noqa: BLE001  缓存命中但读取失败 → 退化为重新抽取
+                logger.warning("understand_node: load_graph failed for project %s vid %s, falling through to extraction",
+                               project_id, vid)
+                # fall through to extract path below
+        # miss or load failure: extract
         raw = extractor.extract(repo_path)
         new_vid = None
         if store is not None:
@@ -56,6 +64,7 @@ def understand_node(state: RunState) -> dict:
     except ExtractionError:
         return _placeholder(project_id)
     except Exception:  # noqa: BLE001  任何意外 → 占位，绝不让 /runs 失败
+        logger.exception("understand_node failed for project %s, falling back to placeholder", project_id)
         return _placeholder(project_id)
 
 
