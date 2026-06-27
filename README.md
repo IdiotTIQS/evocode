@@ -84,6 +84,28 @@ curl http://localhost:8080/actuator/health   # → {"status":"UP"}
 curl http://localhost:8000/health            # → {"status":"ok"}
 ```
 
+#### With a real project knowledge graph (optional `repoPath`)
+
+Pass `repoPath` pointing at a React/Next.js repo. The `understand` step runs the
+Node ts-morph extractor (`tools/ts-extractor/`, set up once via
+`cd tools/ts-extractor && npm ci`) to build a real in-memory project graph; the
+Planner then plans against the actual component tree, and `graphStats` reports
+what was extracted:
+
+```bash
+curl -X POST http://localhost:8080/api/intents \
+  -H "Content-Type: application/json" \
+  -d '{"intent":"add a product page","projectId":"shop","repoPath":"E:/evocode/test/fixtures/next-app"}'
+# → {"runId":"<uuid>","status":"completed","phase":"planned",
+#    "taskGraph":{"tasks":[{"kind":"frontend",...},{"kind":"test",...}]},
+#    "graphStats":{"fileCount":4,"componentCount":4,"importCount":2},
+#    "message":"Planned 2 task(s) for project shop"}
+```
+
+Without `repoPath` (or if Node/the extractor is unavailable), `understand` falls
+back to an empty placeholder graph (`graphStats` all zero) and planning proceeds
+from the intent text alone — no failure.
+
 The Planner uses a deterministic stub LLM by default (no credentials needed). Set
 `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
 runtime to an OpenAI-compatible provider. A blank `intent` is rejected by the

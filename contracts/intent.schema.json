@@ -7,7 +7,17 @@
       "required": ["intent", "projectId"],
       "properties": {
         "intent": { "type": "string", "minLength": 1 },
-        "projectId": { "type": "string", "minLength": 1 }
+        "projectId": { "type": "string", "minLength": 1 },
+        "repoPath": { "type": "string" }
+      }
+    },
+    "ProjectGraphStats": {
+      "type": "object",
+      "required": ["fileCount", "componentCount", "importCount"],
+      "properties": {
+        "fileCount": { "type": "integer" },
+        "componentCount": { "type": "integer" },
+        "importCount": { "type": "integer" }
       }
     },
     "EngineeringTask": {
@@ -35,6 +45,7 @@
         "status": { "type": "string", "enum": ["completed", "failed"] },
         "phase": { "type": "string" },
         "taskGraph": { "$ref": "#/definitions/TaskGraph" },
+        "graphStats": { "$ref": "#/definitions/ProjectGraphStats" },
         "message": { "type": "string" }
       }
     }

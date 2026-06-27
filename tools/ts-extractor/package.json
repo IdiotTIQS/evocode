@@ -1,0 +1,8 @@
+{
+  "name": "evocode-ts-extractor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ts-morph based TS/React graph extractor for EvoCode PKG",
+  "bin": { "evocode-extract": "extract.js" },
+  "dependencies": { "ts-morph": "28.0.0" }
+}

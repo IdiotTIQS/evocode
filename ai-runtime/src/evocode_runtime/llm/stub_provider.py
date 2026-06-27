@@ -10,13 +10,16 @@ class StubLlmProvider(LlmGateway):
 
     def plan(self, intent: str, context: dict) -> list[EngineeringTask]:
         low = intent.lower()
+        stats = (context or {}).get("stats") or {}
+        comp_n = stats.get("componentCount", 0)
         tasks: list[EngineeringTask] = []
         n = 0
         if any(k in low for k in _FRONTEND_KW):
             n += 1
+            extra = f"（项目现有 {comp_n} 个组件）" if comp_n else ""
             tasks.append(EngineeringTask(
                 id=f"task-{n}", title="实现前端界面", kind="frontend",
-                description=f"为意图实现 React/Next.js 界面：{intent}"))
+                description=f"为意图实现 React/Next.js 界面：{intent}{extra}"))
         if any(k in low for k in _BACKEND_KW):
             n += 1
             tasks.append(EngineeringTask(
