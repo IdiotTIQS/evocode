@@ -40,6 +40,34 @@
         "tasks": { "type": "array", "items": { "$ref": "#/definitions/EngineeringTask" } }
       }
     },
+    "ChangeFile": {
+      "type": "object",
+      "required": ["path", "content"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "content": { "type": "string" }
+      }
+    },
+    "Diagnostic": {
+      "type": "object",
+      "required": ["file", "code", "message"],
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": ["integer", "null"] },
+        "code": { "type": "integer" },
+        "message": { "type": "string" }
+      }
+    },
+    "VerificationResult": {
+      "type": "object",
+      "required": ["checked", "passed", "diagnosticCount", "diagnostics"],
+      "properties": {
+        "checked": { "type": "boolean" },
+        "passed": { "type": "boolean" },
+        "diagnosticCount": { "type": "integer" },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/definitions/Diagnostic" } }
+      }
+    },
     "RunResult": {
       "type": "object",
       "required": ["runId", "status", "phase", "taskGraph", "message"],
@@ -49,7 +77,10 @@
         "phase": { "type": "string" },
         "taskGraph": { "$ref": "#/definitions/TaskGraph" },
         "graphStats": { "$ref": "#/definitions/ProjectGraphStats" },
-        "message": { "type": "string" }
+        "message": { "type": "string" },
+        "changeSet": { "type": "array", "items": { "$ref": "#/definitions/ChangeFile" } },
+        "appliedFiles": { "type": "array", "items": { "type": "string" } },
+        "verification": { "$ref": "#/definitions/VerificationResult" }
       }
     }
   }
