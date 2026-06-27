@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvoCode Intent Contracts",
+  "definitions": {
+    "IntentRequest": {
+      "type": "object",
+      "required": ["intent", "projectId"],
+      "properties": {
+        "intent": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "RunAcknowledgement": {
+      "type": "object",
+      "required": ["runId", "status", "message"],
+      "properties": {
+        "runId": { "type": "string", "format": "uuid" },
+        "status": { "type": "string", "enum": ["accepted", "rejected"] },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
