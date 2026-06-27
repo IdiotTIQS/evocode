@@ -48,6 +48,27 @@ export default function Home() {
               </li>
             ))}
           </ul>
+          {result.changeSet && result.changeSet.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <h3>生成的文件 ({result.changeSet.length})</h3>
+              {result.appliedFiles && result.appliedFiles.length > 0 && (
+                <p style={{ color: "green" }}>✓ 已写入目标仓库 {result.appliedFiles.length} 个文件</p>
+              )}
+              {result.changeSet.map((f) => (
+                <details key={f.path} style={{ marginBottom: 8 }}>
+                  <summary><code>{f.path}</code></summary>
+                  <pre style={{ background: "#f5f5f5", padding: 12, overflow: "auto", fontSize: 12 }}>{f.content}</pre>
+                </details>
+              ))}
+            </div>
+          )}
+          {result.verification?.checked && (
+            <p style={{ marginTop: 16 }}>
+              验证：{result.verification.passed
+                ? "✓ 类型检查通过"
+                : `✗ ${result.verification.diagnosticCount} 个问题`}
+            </p>
+          )}
         </section>
       )}
       {error && <p style={{ color: "red" }}>{error}</p>}
