@@ -17,3 +17,4 @@ ai-runtime/data/
 .env
 # OS
 .DS_Store
+.demo-app/
