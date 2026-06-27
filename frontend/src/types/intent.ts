@@ -24,6 +24,7 @@ export interface ProjectGraphStats {
   importCount: number;
   cacheHit?: boolean;
   graphVersionId?: number | null;
+  maxImpactCount?: number;
 }
 
 export interface RunResult {
