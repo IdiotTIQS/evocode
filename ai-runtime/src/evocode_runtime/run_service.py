@@ -24,7 +24,9 @@ class RunService:
             gs = ProjectGraphStats(
                 fileCount=stats.get("fileCount", 0),
                 componentCount=stats.get("componentCount", 0),
-                importCount=stats.get("importCount", 0))
+                importCount=stats.get("importCount", 0),
+                cacheHit=stats.get("cacheHit", False),
+                graphVersionId=stats.get("graphVersionId"))
             return RunResult(
                 runId=run_id, status="completed", phase=final.get("phase", "planned"),
                 taskGraph=TaskGraph(tasks=tasks), graphStats=gs,

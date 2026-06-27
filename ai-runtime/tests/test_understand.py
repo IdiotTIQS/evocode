@@ -16,10 +16,12 @@ def test_understand_placeholder_without_repo():
                            "context": {}, "phase": "", "tasks": []})
     assert out["context"]["stats"]["fileCount"] == 0
     assert out["phase"] == "understood"
+    assert out["context"]["stats"]["cacheHit"] is False
 
 
 @requires_node
-def test_understand_real_pkg_with_repo():
+def test_understand_real_pkg_with_repo(monkeypatch, tmp_path):
+    monkeypatch.setenv("EVOCODE_PKG_DB", str(tmp_path / "data" / "pkg.db"))
     out = understand_node({"intent": "x", "projectId": "demo", "repoPath": FIXTURE,
                            "context": {}, "phase": "", "tasks": []})
     assert out["context"]["stats"]["fileCount"] >= 4

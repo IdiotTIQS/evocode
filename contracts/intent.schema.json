@@ -17,7 +17,9 @@
       "properties": {
         "fileCount": { "type": "integer" },
         "componentCount": { "type": "integer" },
-        "importCount": { "type": "integer" }
+        "importCount": { "type": "integer" },
+        "cacheHit": { "type": "boolean" },
+        "graphVersionId": { "type": ["integer", "null"] }
       }
     },
     "EngineeringTask": {
