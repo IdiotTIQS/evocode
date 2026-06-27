@@ -1,7 +1,7 @@
 package com.evocode.controlplane.client;
 
 import com.evocode.controlplane.dto.IntentRequest;
-import com.evocode.controlplane.dto.RunAcknowledgement;
+import com.evocode.controlplane.dto.RunResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -20,12 +20,12 @@ public class PythonRuntimeClient {
             .build();
     }
 
-    public RunAcknowledgement createRun(IntentRequest request) {
+    public RunResult createRun(IntentRequest request) {
         return restClient.post()
             .uri("/runs")
             .contentType(MediaType.APPLICATION_JSON)
             .body(request)
             .retrieve()
-            .body(RunAcknowledgement.class);
+            .body(RunResult.class);
     }
 }
