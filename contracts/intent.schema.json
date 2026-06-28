@@ -68,6 +68,25 @@
         "diagnostics": { "type": "array", "items": { "$ref": "#/definitions/Diagnostic" } }
       }
     },
+    "ReviewFinding": {
+      "type": "object",
+      "required": ["severity", "filePath", "message"],
+      "properties": {
+        "severity": { "type": "string", "enum": ["critical", "major", "minor", "suggestion"] },
+        "filePath": { "type": "string" },
+        "message": { "type": "string" },
+        "suggestedFix": { "type": ["string", "null"] }
+      }
+    },
+    "ReviewOutput": {
+      "type": "object",
+      "required": ["verdict", "findings", "summary"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["approve", "request_changes", "block"] },
+        "findings": { "type": "array", "items": { "$ref": "#/definitions/ReviewFinding" } },
+        "summary": { "type": "string" }
+      }
+    },
     "RunResult": {
       "type": "object",
       "required": ["runId", "status", "phase", "taskGraph", "message"],
@@ -80,7 +99,8 @@
         "message": { "type": "string" },
         "changeSet": { "type": "array", "items": { "$ref": "#/definitions/ChangeFile" } },
         "appliedFiles": { "type": "array", "items": { "type": "string" } },
-        "verification": { "$ref": "#/definitions/VerificationResult" }
+        "verification": { "$ref": "#/definitions/VerificationResult" },
+        "review": { "$ref": "#/definitions/ReviewOutput" }
       }
     }
   }

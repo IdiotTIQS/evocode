@@ -91,5 +91,6 @@ class RunResult(BaseModel):
     change_set: list[ChangeFile] = Field(default_factory=list, alias="changeSet")
     applied_files: list[str] = Field(default_factory=list, alias="appliedFiles")
     verification: "VerificationResult | None" = Field(default=None)
+    review: "ReviewOutput | None" = Field(default=None)
 
     model_config = ConfigDict(populate_by_name=True)

@@ -46,6 +46,19 @@ export interface VerificationResult {
   diagnostics: Diagnostic[];
 }
 
+export interface ReviewFinding {
+  severity: "critical" | "major" | "minor" | "suggestion";
+  filePath: string;
+  message: string;
+  suggestedFix?: string | null;
+}
+
+export interface ReviewOutput {
+  verdict: "approve" | "request_changes" | "block";
+  findings: ReviewFinding[];
+  summary: string;
+}
+
 export interface RunResult {
   runId: string;
   status: "completed" | "failed";
@@ -55,5 +68,6 @@ export interface RunResult {
   changeSet?: ChangeFile[];
   appliedFiles?: string[];
   verification?: VerificationResult;
+  review?: ReviewOutput;
   message: string;
 }

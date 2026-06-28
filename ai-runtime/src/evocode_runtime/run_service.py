@@ -3,7 +3,7 @@ from uuid import uuid4
 from evocode_runtime.graph import build_graph
 from evocode_runtime.models import (
     RunResult, TaskGraph, EngineeringTask, ProjectGraphStats,
-    ChangeFile, VerificationResult, Diagnostic,
+    ChangeFile, VerificationResult, Diagnostic, ReviewOutput,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,10 +41,13 @@ class RunService:
                 diagnosticCount=v.get("diagnosticCount", 0),
                 diagnostics=[Diagnostic(**d) for d in v.get("diagnostics", [])],
             ) if v else None
+            r = final.get("review") or {}
+            review = ReviewOutput(**r) if r else None
             return RunResult(
                 runId=run_id, status="completed", phase=final.get("phase", "planned"),
                 taskGraph=TaskGraph(tasks=tasks), graphStats=gs,
                 changeSet=change_set, appliedFiles=applied, verification=verification,
+                review=review,
                 message=(f"Planned {len(tasks)} task(s), generated {len(change_set)} file(s)"
                          f"{f', applied {len(applied)}' if applied else ''} for project {project_id}"))
         except Exception:  # noqa: BLE001

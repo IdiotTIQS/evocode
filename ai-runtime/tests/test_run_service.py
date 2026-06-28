@@ -3,6 +3,15 @@ import tempfile
 from pathlib import Path
 from evocode_runtime.run_service import RunService
 
+
+def test_run_result_includes_review_verdict():
+    svc = RunService()
+    result = svc.execute(intent="add a contact page", project_id="demo", repo_path="")
+    assert result.review is not None
+    assert result.review.verdict in {"approve", "request_changes", "block"}
+    # 无 repoPath → 未生成测试文件路径? 计划里 stub 会产出 test 任务，但 changeSet 含 test 文件
+    assert isinstance(result.review.findings, list)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = str(REPO_ROOT / "test" / "fixtures" / "next-app")
 
