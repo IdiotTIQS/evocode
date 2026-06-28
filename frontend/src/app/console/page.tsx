@@ -1,126 +1,89 @@
 "use client";
 
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
+
+import { IntentForm } from "@/components/console/IntentForm";
+import { PipelineStepper } from "@/components/console/PipelineStepper";
+import { ResultTabs } from "@/components/console/ResultTabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { submitIntent } from "@/lib/api";
 import type { RunResult } from "@/types/intent";
 
-export default function Console() {
+export default function ConsolePage() {
   const [intent, setIntent] = useState("");
   const [projectId, setProjectId] = useState("demo");
   const [repoPath, setRepoPath] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  async function onSubmit() {
+    setLoading(true);
     try {
-      setResult(await submitIntent({ intent, projectId, repoPath: repoPath || undefined }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "unknown error");
+      const r = await submitIntent({
+        intent,
+        projectId,
+        repoPath: repoPath || undefined,
+      });
+      setResult(r);
+    } catch {
+      toast.error(
+        "无法连接控制平面，请确认服务已启动（control-plane:8080 与 ai-runtime:8000）"
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <a href="/" className="text-sm text-[var(--color-evo-accent)] hover:underline">← 返回首页</a>
-      <h1 className="mt-4 text-3xl display">EvoCode Console</h1>
-      <p className="mt-2 text-[var(--color-evo-muted)]">
-        提交一个意图，流水线将 understand → plan → architect → generate → verify → review 一次跑完。
-      </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <input
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          placeholder="projectId"
-          className="w-full rounded-lg border border-[var(--color-evo-border-soft)] px-3 py-2 outline-none focus:border-[var(--color-evo-accent)]"
-        />
-        <input
-          value={repoPath}
-          onChange={(e) => setRepoPath(e.target.value)}
-          placeholder="目标仓库路径（可选）"
-          className="w-full rounded-lg border border-[var(--color-evo-border-soft)] px-3 py-2 outline-none focus:border-[var(--color-evo-accent)]"
-        />
-        <textarea
-          value={intent}
-          onChange={(e) => setIntent(e.target.value)}
-          placeholder="Describe your intent..."
-          rows={4}
-          className="w-full rounded-lg border border-[var(--color-evo-border-soft)] px-3 py-2 outline-none focus:border-[var(--color-evo-accent)]"
-        />
-        <button
-          type="submit"
-          disabled={!intent}
-          className="rounded-lg bg-[var(--color-evo-accent)] px-5 py-2.5 font-medium text-white transition hover:bg-[var(--color-evo-accent-strong)] disabled:opacity-40"
-        >
-          Submit Intent
-        </button>
-      </form>
-      {result && (
-        <section className="mt-8 space-y-4">
-          <p>
-            Run <code className="rounded bg-[var(--color-evo-surface-alt)] px-1.5 py-0.5 text-sm">{result.runId}</code> — {result.status} ({result.phase})
-          </p>
-          <p className="text-[var(--color-evo-muted)]">{result.message}</p>
-          {result?.graphStats && (
-            <p className="text-sm text-[var(--color-evo-muted)]">
-              项目图：{result.graphStats.fileCount} 文件 / {result.graphStats.componentCount} 组件 / {result.graphStats.importCount} import
-              {result.graphStats.cacheHit ? "（缓存命中）" : "（新抽取）"}
-              {result.graphStats.graphVersionId != null ? ` v${result.graphStats.graphVersionId}` : ""}
-              {" · 最大影响面 "}{result.graphStats.maxImpactCount ?? 0}{" 文件"}
-            </p>
-          )}
-          <ul className="space-y-1">
-            {result.taskGraph.tasks.map((t) => (
-              <li key={t.id}>
-                <strong>[{t.kind}]</strong> {t.title} — {t.description}
-              </li>
-            ))}
-          </ul>
-          {result.changeSet && result.changeSet.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="font-medium">生成的文件 ({result.changeSet.length})</h3>
-              {result.appliedFiles && result.appliedFiles.length > 0 && (
-                <p className="text-[var(--color-evo-teal)]">✓ 已写入目标仓库 {result.appliedFiles.length} 个文件</p>
-              )}
-              {result.changeSet.map((f) => (
-                <details key={f.path} className="rounded-lg border border-[var(--color-evo-border-soft)] p-2">
-                  <summary className="cursor-pointer"><code>{f.path}</code></summary>
-                  <pre className="mt-2 overflow-auto rounded bg-[var(--color-evo-surface-alt)] p-3 text-xs">{f.content}</pre>
-                </details>
-              ))}
+    <div className="space-y-8">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold">运行意图</h2>
+        <p className="text-sm text-muted-foreground">
+          描述一个意图，流水线会依次理解、规划、架构、生成、验证、审查，一次跑完。
+        </p>
+      </div>
+
+      <IntentForm
+        value={intent}
+        projectId={projectId}
+        repoPath={repoPath}
+        onIntentChange={setIntent}
+        onProjectIdChange={setProjectId}
+        onRepoPathChange={setRepoPath}
+        onSubmit={onSubmit}
+        loading={loading}
+      />
+
+      {loading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      ) : result ? (
+        <div className="space-y-6">
+          <PipelineStepper phase={result.phase} />
+          <ResultTabs result={result} />
+        </div>
+      ) : (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <Sparkles className="size-6 text-muted-foreground" aria-hidden="true" />
             </div>
-          )}
-          {result.verification?.checked && (
-            <p>
-              验证：{result.verification.passed ? "✓ 类型检查通过" : `✗ ${result.verification.diagnosticCount} 个问题`}
-            </p>
-          )}
-          {result.review && (
-            <div className="space-y-2">
-              <h3 className="font-medium">
-                审查裁定：{result.review.verdict === "approve"
-                  ? "✓ 通过 (approve)"
-                  : result.review.verdict === "request_changes"
-                  ? "⚠ 需修改 (request_changes)"
-                  : "✗ 阻断 (block)"}
-              </h3>
-              <p className="text-[var(--color-evo-muted)]">{result.review.summary}</p>
-              {result.review.findings.length > 0 && (
-                <ul className="space-y-1 text-sm">
-                  {result.review.findings.map((f, i) => (
-                    <li key={i}>
-                      <strong>[{f.severity}]</strong> <code>{f.filePath}</code> — {f.message}
-                      {f.suggestedFix ? <em> 建议：{f.suggestedFix}</em> : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <div className="space-y-1">
+              <p className="font-medium">提交一个意图，开始一次运行</p>
+              <p className="text-sm text-muted-foreground">
+                在上面填写意图并点击运行，这里会展示阶段进度和结果。
+              </p>
             </div>
-          )}
-        </section>
+          </CardContent>
+        </Card>
       )}
-      {error && <p className="mt-4 text-red-600">{error}</p>}
-    </main>
+    </div>
   );
 }
