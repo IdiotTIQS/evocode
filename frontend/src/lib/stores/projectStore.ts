@@ -38,6 +38,32 @@ export function createProject(name: string, repoPath?: string): Project {
   return project;
 }
 
+// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects/${id}`, { method: "PATCH" })。
+// 最小实现：合并 name/repoPath 补丁；repoPath 传空字符串/undefined 时清除该字段。
+export function updateProject(
+  id: string,
+  patch: { name?: string; repoPath?: string }
+): Project | null {
+  const projects = readAll();
+  const idx = projects.findIndex((p) => p.id === id);
+  if (idx === -1) return null;
+  const current = projects[idx]!;
+  const next: Project = {
+    ...current,
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+  };
+  if (patch.repoPath !== undefined) {
+    if (patch.repoPath === "") {
+      delete next.repoPath;
+    } else {
+      next.repoPath = patch.repoPath;
+    }
+  }
+  projects[idx] = next;
+  writeAll(projects);
+  return next;
+}
+
 // TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects/${id}`, { method: "DELETE" })。
 export function deleteProject(id: string): void {
   writeAll(readAll().filter((p) => p.id !== id));
