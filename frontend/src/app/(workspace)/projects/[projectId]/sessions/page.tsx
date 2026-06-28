@@ -27,8 +27,13 @@ export default function SessionsPage() {
 
   useEffect(() => {
     let active = true;
-    const data = listSessions(projectId);
-    if (active) setSessions(data);
+    listSessions(projectId)
+      .then((data) => {
+        if (active) setSessions(data);
+      })
+      .catch(() => {
+        if (active) setSessions([]);
+      });
     return () => {
       active = false;
     };
@@ -37,10 +42,10 @@ export default function SessionsPage() {
   const trimmed = title.trim();
   const canSubmit = trimmed.length > 0;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    const session = createSession(projectId, trimmed);
+    const session = await createSession(projectId, trimmed);
     router.push(`/sessions/${session.id}`);
   }
 

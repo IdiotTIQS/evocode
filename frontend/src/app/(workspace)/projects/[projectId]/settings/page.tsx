@@ -30,16 +30,20 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [repoPath, setRepoPath] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     let active = true;
-    const p = getProject(projectId);
-    if (active && p) {
-      setProject(p);
-      setName(p.name);
-      setRepoPath(p.repoPath ?? "");
-    }
+    getProject(projectId)
+      .then((p) => {
+        if (active && p) {
+          setProject(p);
+          setName(p.name);
+          setRepoPath(p.repoPath ?? "");
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -48,23 +52,35 @@ export default function SettingsPage() {
   const trimmedName = name.trim();
   const canSave = trimmedName.length > 0;
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
-    const next = updateProject(projectId, {
-      name: trimmedName,
-      repoPath: repoPath.trim(),
-    });
-    if (next) {
-      setProject(next);
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2000);
+    setSaveError(false);
+    try {
+      const next = await updateProject(projectId, {
+        name: trimmedName,
+        repoPath: repoPath.trim(),
+      });
+      if (next) {
+        setProject(next);
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 2000);
+      } else {
+        setSaveError(true);
+      }
+    } catch {
+      setSaveError(true);
     }
   }
 
-  function handleDelete() {
-    deleteProject(projectId);
-    router.push("/projects");
+  async function handleDelete() {
+    try {
+      await deleteProject(projectId);
+      router.push("/projects");
+    } catch {
+      setSaveError(true);
+      setConfirmingDelete(false);
+    }
   }
 
   return (
@@ -85,6 +101,7 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   setName(e.target.value);
                   setSaved(false);
+                  setSaveError(false);
                 }}
                 required
               />
@@ -97,6 +114,7 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   setRepoPath(e.target.value);
                   setSaved(false);
+                  setSaveError(false);
                 }}
                 placeholder="/path/to/repo"
               />
@@ -113,6 +131,11 @@ export default function SettingsPage() {
                   已保存
                 </span>
               ) : null}
+              {saveError ? (
+                <span role="alert" className="text-sm text-destructive">
+                  操作失败，请确认控制平面已启动后重试
+                </span>
+              ) : null}
             </div>
           </form>
         </CardContent>
@@ -126,7 +149,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            删除项目不可恢复。该项目的本地数据将被移除。
+            删除项目不可恢复。该项目的数据将被永久移除。
           </p>
           <Separator />
           {!confirmingDelete ? (

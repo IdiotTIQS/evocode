@@ -36,27 +36,33 @@ export default function SessionWorkspacePage() {
     setState("loading");
     setLatestResult(null);
 
-    const found = getSession(sessionId);
-    if (!found) {
-      if (active) {
-        setSession(null);
-        setProject(null);
-        setMessages([]);
-        setState("notfound");
+    (async () => {
+      try {
+        const found = await getSession(sessionId);
+        if (!found) {
+          if (active) {
+            setSession(null);
+            setProject(null);
+            setMessages([]);
+            setState("notfound");
+          }
+          return;
+        }
+        const [proj, msgs] = await Promise.all([
+          getProject(found.projectId),
+          getMessages(sessionId),
+        ]);
+        if (active) {
+          setSession(found);
+          setProject(proj);
+          setMessages(msgs);
+          setState("ready");
+        }
+      } catch {
+        if (active) setState("notfound");
       }
-      return () => {
-        active = false;
-      };
-    }
+    })();
 
-    const proj = getProject(found.projectId);
-    const msgs = getMessages(sessionId);
-    if (active) {
-      setSession(found);
-      setProject(proj);
-      setMessages(msgs);
-      setState("ready");
-    }
     return () => {
       active = false;
     };
@@ -66,7 +72,9 @@ export default function SessionWorkspacePage() {
   const handleResult = useCallback(
     (result: RunResult) => {
       setLatestResult(result);
-      setMessages(getMessages(sessionId));
+      getMessages(sessionId)
+        .then((m) => setMessages(m))
+        .catch(() => {});
     },
     [sessionId]
   );

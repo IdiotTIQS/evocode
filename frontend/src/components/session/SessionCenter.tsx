@@ -22,6 +22,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+// 会话消息为「记录」语义，对主流程非关键路径：fire-and-forget，吞掉网络错误避免
+// 未处理 rejection（消息落库失败不应打断意图/审批操作）。
+function logMessage(
+  sessionId: string,
+  msg: Parameters<typeof appendMessage>[1]
+): void {
+  void appendMessage(sessionId, msg).catch(() => {});
+}
+
 export function SessionCenter({
   session,
   projectId,
@@ -61,7 +70,7 @@ export function SessionCenter({
       completedRunRef.current !== exec.result.runId
     ) {
       completedRunRef.current = exec.result.runId;
-      appendMessage(session.id, {
+      logMessage(session.id, {
         role: "agent",
         kind: "result",
         text: `运行完成：${exec.result.phase}`,
@@ -74,7 +83,7 @@ export function SessionCenter({
   // failed：提示并记录。
   useEffect(() => {
     if (exec.state === "failed" && exec.error) {
-      appendMessage(session.id, {
+      logMessage(session.id, {
         role: "agent",
         kind: "status",
         text: `提交失败：${exec.error}`,
@@ -87,12 +96,12 @@ export function SessionCenter({
     e.preventDefault();
     if (!canSubmit) return;
     completedRunRef.current = null;
-    appendMessage(session.id, { role: "user", kind: "intent", text: trimmed });
+    logMessage(session.id, { role: "user", kind: "intent", text: trimmed });
     exec.submitIntent(trimmed);
   }
 
   function handleApprovePlan() {
-    appendMessage(session.id, {
+    logMessage(session.id, {
       role: "user",
       kind: "status",
       text: "已批准计划，开始生成代码",
@@ -101,7 +110,7 @@ export function SessionCenter({
   }
 
   function handleApproveDiff() {
-    appendMessage(session.id, {
+    logMessage(session.id, {
       role: "user",
       kind: "status",
       text: "已批准变更并应用",
@@ -110,7 +119,7 @@ export function SessionCenter({
   }
 
   function handleReject() {
-    appendMessage(session.id, {
+    logMessage(session.id, {
       role: "user",
       kind: "status",
       text: exec.gate === "diff" ? "已拒绝变更" : "已拒绝计划",

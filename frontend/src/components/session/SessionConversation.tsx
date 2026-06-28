@@ -71,8 +71,13 @@ export function SessionConversation({
 
   useEffect(() => {
     let active = true;
-    const data = listSessions(projectId);
-    if (active) setSiblings(data);
+    listSessions(projectId)
+      .then((data) => {
+        if (active) setSiblings(data);
+      })
+      .catch(() => {
+        if (active) setSiblings([]);
+      });
     return () => {
       active = false;
     };

@@ -1,84 +1,104 @@
 // frontend/src/lib/stores/sessionStore.ts
-// Session / SessionMessage 本地数据源适配器（seam）。当前用 localStorage 持久化，
-// 接口与未来后端对齐。诚实隔离：这不是真实后端。
+// Session / SessionMessage 数据源适配器。已对接控制平面真实端点（跨设备持久化）。
+// 所有函数为 async：调用方需 await。错误沿用 api.ts 的 ControlPlaneError。
 import type { Session, SessionMessage } from "@/types/domain";
-import { getItem, setItem, newId } from "./storage";
+import { ControlPlaneError } from "@/lib/api";
 
-const SESSIONS_KEY = "evocode.sessions";
-const MESSAGES_KEY = "evocode.messages";
+const BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8080";
 
-function readSessions(): Session[] {
-  return getItem<Session[]>(SESSIONS_KEY, []);
+interface SessionDto {
+  id: string;
+  projectId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-function writeSessions(sessions: Session[]): void {
-  setItem(SESSIONS_KEY, sessions);
+// 当前 SessionDto 无可空字段，映射为直通；保留此函数与 projectStore.fromDto 对称，
+// 未来 Session 新增可选字段时在此统一做 null→undefined 归一化，避免遗漏。
+function sessionFromDto(d: SessionDto): Session {
+  return { ...d };
 }
 
-function readMessages(): SessionMessage[] {
-  return getItem<SessionMessage[]>(MESSAGES_KEY, []);
+interface SessionMessageDto {
+  id: string;
+  sessionId: string;
+  role: "user" | "agent";
+  kind: "intent" | "status" | "result";
+  text: string;
+  runId: string | null;
+  createdAt: string;
 }
 
-function writeMessages(messages: SessionMessage[]): void {
-  setItem(MESSAGES_KEY, messages);
-}
-
-// TODO(backend): 后端 Session API 落地后替换为 fetch(`/api/sessions?projectId=...`)。
-export function listSessions(projectId?: string): Session[] {
-  const sessions = readSessions();
-  return projectId === undefined
-    ? sessions
-    : sessions.filter((s) => s.projectId === projectId);
-}
-
-// TODO(backend): 后端 Session API 落地后替换为 fetch(`/api/sessions/${id}`)。
-export function getSession(id: string): Session | null {
-  return readSessions().find((s) => s.id === id) ?? null;
-}
-
-// TODO(backend): 后端 Session API 落地后替换为 fetch(`/api/sessions`, { method: "POST" })。
-export function createSession(projectId: string, title: string): Session {
-  const now = new Date().toISOString();
-  const session: Session = {
-    id: newId(),
-    projectId,
-    title,
-    createdAt: now,
-    updatedAt: now,
+function msgFromDto(d: SessionMessageDto): SessionMessage {
+  return {
+    id: d.id,
+    sessionId: d.sessionId,
+    role: d.role,
+    kind: d.kind,
+    text: d.text,
+    ...(d.runId ? { runId: d.runId } : {}),
+    createdAt: d.createdAt,
   };
-  const sessions = readSessions();
-  sessions.push(session);
-  writeSessions(sessions);
-  return session;
 }
 
-// TODO(backend): 后端落地后此更新随消息写入合并到 POST 消息接口。
-export function touchSession(id: string): void {
-  const sessions = readSessions();
-  const idx = sessions.findIndex((s) => s.id === id);
-  if (idx === -1) return;
-  sessions[idx] = { ...sessions[idx]!, updatedAt: new Date().toISOString() };
-  writeSessions(sessions);
+export async function listSessions(projectId?: string): Promise<Session[]> {
+  const qs = projectId !== undefined
+    ? `?projectId=${encodeURIComponent(projectId)}`
+    : "";
+  const resp = await fetch(`${BASE}/api/sessions${qs}`);
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  const data: SessionDto[] = await resp.json();
+  return data.map(sessionFromDto);
 }
 
-// TODO(backend): 后端 Message API 落地后替换为 fetch(`/api/sessions/${sessionId}/messages`, { method: "POST" })。
-export function appendMessage(
+/** 未找到返回 null（404）。 */
+export async function getSession(id: string): Promise<Session | null> {
+  const resp = await fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}`);
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return sessionFromDto(await resp.json());
+}
+
+export async function createSession(
+  projectId: string,
+  title: string
+): Promise<Session> {
+  const resp = await fetch(`${BASE}/api/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, title }),
+  });
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return resp.json();
+}
+
+/**
+ * 追加消息（服务端生成 id/createdAt，并刷新 session.updatedAt）。
+ * 返回写入后的完整消息。
+ */
+export async function appendMessage(
   sessionId: string,
   msg: Omit<SessionMessage, "id" | "sessionId" | "createdAt">
-): void {
-  const message: SessionMessage = {
-    id: newId(),
-    sessionId,
-    createdAt: new Date().toISOString(),
-    ...msg,
-  };
-  const messages = readMessages();
-  messages.push(message);
-  writeMessages(messages);
-  touchSession(sessionId);
+): Promise<SessionMessage> {
+  const resp = await fetch(
+    `${BASE}/api/sessions/${encodeURIComponent(sessionId)}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(msg),
+    }
+  );
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return msgFromDto(await resp.json());
 }
 
-// TODO(backend): 后端 Message API 落地后替换为 fetch(`/api/sessions/${sessionId}/messages`)。
-export function getMessages(sessionId: string): SessionMessage[] {
-  return readMessages().filter((m) => m.sessionId === sessionId);
+export async function getMessages(sessionId: string): Promise<SessionMessage[]> {
+  const resp = await fetch(
+    `${BASE}/api/sessions/${encodeURIComponent(sessionId)}/messages`
+  );
+  if (resp.status === 404) return [];
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  const data: SessionMessageDto[] = await resp.json();
+  return data.map(msgFromDto);
 }

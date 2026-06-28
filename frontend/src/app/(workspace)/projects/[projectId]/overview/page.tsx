@@ -31,8 +31,20 @@ export default function OverviewPage() {
 
   useEffect(() => {
     let active = true;
-    setProject(getProject(projectId));
-    setSessionCount(listSessions(projectId).length);
+    getProject(projectId)
+      .then((p) => {
+        if (active) setProject(p);
+      })
+      .catch(() => {
+        if (active) setProject(null);
+      });
+    listSessions(projectId)
+      .then((s) => {
+        if (active) setSessionCount(s.length);
+      })
+      .catch(() => {
+        if (active) setSessionCount(0);
+      });
     listRuns()
       .then((runs) => {
         if (!active) return;
@@ -76,9 +88,6 @@ export default function OverviewPage() {
               <dd className="truncate font-mono text-xs">{projectId}</dd>
             </div>
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">
-            项目与会话保存在浏览器本地，不跨设备；后端落地后将迁移。
-          </p>
         </CardContent>
       </Card>
 

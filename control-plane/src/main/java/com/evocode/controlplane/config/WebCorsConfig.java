@@ -16,7 +16,7 @@ public class WebCorsConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
                     .allowedOrigins("http://localhost:3000")
-                    .allowedMethods("GET", "POST", "OPTIONS")
+                    .allowedMethods("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS")
                     .allowedHeaders("*");
             }
         };

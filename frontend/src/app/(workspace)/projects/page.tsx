@@ -27,8 +27,13 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let active = true;
-    const data = listProjects();
-    if (active) setProjects(data);
+    listProjects()
+      .then((data) => {
+        if (active) setProjects(data);
+      })
+      .catch(() => {
+        if (active) setProjects([]);
+      });
     return () => {
       active = false;
     };
@@ -37,11 +42,11 @@ export default function ProjectsPage() {
   const trimmedName = name.trim();
   const canSubmit = trimmedName.length > 0;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     const trimmedRepo = repoPath.trim();
-    const project = createProject(
+    const project = await createProject(
       trimmedName,
       trimmedRepo === "" ? undefined : trimmedRepo
     );
@@ -69,9 +74,6 @@ export default function ProjectsPage() {
           <h1 className="text-2xl font-semibold">项目</h1>
           <p className="text-sm text-muted-foreground">
             管理你的项目，进入项目查看会话、运行与设置。
-          </p>
-          <p className="text-xs text-muted-foreground">
-            项目与会话当前保存在浏览器本地（不跨设备），后端落地后将迁移。
           </p>
         </div>
         {!creating ? (

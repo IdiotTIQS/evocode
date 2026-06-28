@@ -41,10 +41,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    // 本地 localStorage 数据源，只能在客户端读。
-    setProjects(listProjects());
-    setSessions(listSessions());
-    // listRuns 是真实后端 API，可能失败（后端未启动），容错处理。
+    // Project / Session 现为真实后端 API，可能失败（后端未启动），容错处理。
+    listProjects()
+      .then((p) => {
+        if (active) setProjects(p);
+      })
+      .catch(() => {
+        if (active) setProjects([]);
+      });
+    listSessions()
+      .then((s) => {
+        if (active) setSessions(s);
+      })
+      .catch(() => {
+        if (active) setSessions([]);
+      });
     listRuns(8)
       .then((r) => {
         if (active) {

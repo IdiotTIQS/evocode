@@ -27,17 +27,25 @@ export default function ProjectLayout({
   const projectId = params.projectId;
   const pathname = usePathname();
 
-  // hydrated 区分"还没读 localStorage"和"确实不存在"，避免 SSR 期误报。
+  // hydrated 区分"还没拉取"和"确实不存在"，避免加载期误报。
   const [project, setProject] = useState<Project | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     let active = true;
-    const p = getProject(projectId);
-    if (active) {
-      setProject(p);
-      setHydrated(true);
-    }
+    getProject(projectId)
+      .then((p) => {
+        if (active) {
+          setProject(p);
+          setHydrated(true);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProject(null);
+          setHydrated(true);
+        }
+      });
     return () => {
       active = false;
     };

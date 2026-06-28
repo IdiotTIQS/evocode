@@ -1,70 +1,78 @@
 // frontend/src/lib/stores/projectStore.ts
-// Project 本地数据源适配器（seam）。当前用 localStorage 持久化，接口与未来后端对齐。
-// 诚实隔离：这不是真实后端，仅为页面集成提供过渡数据源。
+// Project 数据源适配器。已对接控制平面真实端点（跨设备持久化）。
+// 所有函数为 async：调用方需 await。错误沿用 api.ts 的 ControlPlaneError。
 import type { Project } from "@/types/domain";
-import { getItem, setItem, newId } from "./storage";
+import { ControlPlaneError } from "@/lib/api";
 
-const PROJECTS_KEY = "evocode.projects";
+const BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8080";
 
-function readAll(): Project[] {
-  return getItem<Project[]>(PROJECTS_KEY, []);
+// 后端 ProjectDto.repoPath 可为 null；归一化为可选字段以匹配 Project 类型。
+interface ProjectDto {
+  id: string;
+  name: string;
+  repoPath: string | null;
+  createdAt: string;
 }
 
-function writeAll(projects: Project[]): void {
-  setItem(PROJECTS_KEY, projects);
-}
-
-// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects`)。
-export function listProjects(): Project[] {
-  return readAll();
-}
-
-// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects/${id}`)。
-export function getProject(id: string): Project | null {
-  return readAll().find((p) => p.id === id) ?? null;
-}
-
-// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects`, { method: "POST" })。
-export function createProject(name: string, repoPath?: string): Project {
-  const project: Project = {
-    id: newId(),
-    name,
-    ...(repoPath !== undefined ? { repoPath } : {}),
-    createdAt: new Date().toISOString(),
+function fromDto(d: ProjectDto): Project {
+  return {
+    id: d.id,
+    name: d.name,
+    ...(d.repoPath ? { repoPath: d.repoPath } : {}),
+    createdAt: d.createdAt,
   };
-  const projects = readAll();
-  projects.push(project);
-  writeAll(projects);
-  return project;
 }
 
-// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects/${id}`, { method: "PATCH" })。
-// 最小实现：合并 name/repoPath 补丁；repoPath 传空字符串/undefined 时清除该字段。
-export function updateProject(
+export async function listProjects(): Promise<Project[]> {
+  const resp = await fetch(`${BASE}/api/projects`);
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  const data: ProjectDto[] = await resp.json();
+  return data.map(fromDto);
+}
+
+/** 未找到返回 null（404）；其余非 2xx 抛 ControlPlaneError。 */
+export async function getProject(id: string): Promise<Project | null> {
+  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`);
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return fromDto(await resp.json());
+}
+
+export async function createProject(
+  name: string,
+  repoPath?: string
+): Promise<Project> {
+  const resp = await fetch(`${BASE}/api/projects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, ...(repoPath !== undefined ? { repoPath } : {}) }),
+  });
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return fromDto(await resp.json());
+}
+
+/**
+ * 合并 name/repoPath 补丁；repoPath 传空字符串清除该字段。
+ * 未找到返回 null（404）。
+ */
+export async function updateProject(
   id: string,
   patch: { name?: string; repoPath?: string }
-): Project | null {
-  const projects = readAll();
-  const idx = projects.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  const current = projects[idx]!;
-  const next: Project = {
-    ...current,
-    ...(patch.name !== undefined ? { name: patch.name } : {}),
-  };
-  if (patch.repoPath !== undefined) {
-    if (patch.repoPath === "") {
-      delete next.repoPath;
-    } else {
-      next.repoPath = patch.repoPath;
-    }
-  }
-  projects[idx] = next;
-  writeAll(projects);
-  return next;
+): Promise<Project | null> {
+  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return fromDto(await resp.json());
 }
 
-// TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects/${id}`, { method: "DELETE" })。
-export function deleteProject(id: string): void {
-  writeAll(readAll().filter((p) => p.id !== id));
+export async function deleteProject(id: string): Promise<void> {
+  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  // 404 视为已删除（幂等）。
+  if (!resp.ok && resp.status !== 404) throw new ControlPlaneError(resp.status);
 }
