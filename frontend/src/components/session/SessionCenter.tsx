@@ -47,6 +47,7 @@ export function SessionCenter({
   const [intent, setIntent] = useState("");
   const exec = useExecution({
     projectId,
+    sessionId: session.id,
     ...(repoPath !== undefined ? { repoPath } : {}),
   });
 

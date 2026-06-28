@@ -39,8 +39,15 @@ public class RunController {
 
     @GetMapping
     public List<RunSummary> list(@RequestParam(defaultValue = "20") int limit,
+                                 @RequestParam(required = false) String sessionId,
                                  @AuthenticationPrincipal AuthPrincipal me) {
         int capped = Math.min(Math.max(limit, 1), 100);
+        if (sessionId != null) {
+            // 会话运行历史：ADMIN 不限属主，USER 仅本人——会话本身已属主隔离。
+            return me.isAdmin()
+                ? store.listBySession(sessionId, capped)
+                : store.listByOwnerAndSession(me.userId(), sessionId, capped);
+        }
         return me.isAdmin() ? store.list(capped) : store.listByOwner(me.userId(), capped);
     }
 

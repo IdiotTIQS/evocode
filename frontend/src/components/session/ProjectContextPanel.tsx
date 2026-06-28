@@ -1,10 +1,13 @@
 "use client";
 // frontend/src/components/session/ProjectContextPanel.tsx
 // 右栏：项目上下文（项目名 / repoPath / createdAt；latestResult 若有 graphStats 显示文件/组件/import 数）
-// + "Agent 活动"区（实时进度已由 SSE 驱动中栏流水线；此侧栏汇总视图待后续增量）。
-import { FolderGit2 } from "lucide-react";
+// + 「本会话运行历史」（listRuns(sessionId)，latestResult 变化时刷新，链 /runs/[id]）。
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { FolderGit2, Play } from "lucide-react";
 
-import type { Project, RunResult } from "@/types/domain";
+import type { Project, RunResult, RunSummary } from "@/types/domain";
+import { listRuns } from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -34,13 +37,35 @@ function StatRow({ label, value }: { label: string; value: number }) {
 export function ProjectContextPanel({
   project,
   latestResult,
+  sessionId,
   className,
 }: {
   project: Project | null;
   latestResult: RunResult | null;
+  sessionId?: string;
   className?: string;
 }) {
   const stats = latestResult?.graphStats;
+
+  // 本会话运行历史：挂载时加载，latestResult（新 run 完成）变化时刷新。
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  useEffect(() => {
+    if (!sessionId) return;
+    let active = true;
+    listRuns(20, sessionId)
+      .then((data) => {
+        if (active) setRuns(data);
+      })
+      .catch(() => {
+        if (active) setRuns([]);
+      });
+    return () => {
+      active = false;
+    };
+    // 依赖稳定派生值而非 latestResult 对象引用：仅在新 run（runId 变）或状态迁移时刷新，
+    // 避免 SSE 每个节点事件都触发一次 listRuns。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, latestResult?.runId, latestResult?.status]);
 
   return (
     <aside
@@ -95,14 +120,32 @@ export function ProjectContextPanel({
 
       <div className="px-4 py-3">
         <h3 className="mb-2 text-xs font-medium text-muted-foreground">
-          Agent 活动
+          本会话运行历史
         </h3>
-        {/* 实时进度已通过 SSE 驱动中栏流水线/阶段文案；此侧栏镜像为后续增量。 */}
-        <div className="rounded-md border border-dashed px-3 py-4 text-center">
-          <p className="text-xs text-muted-foreground">
-            实时进度见中栏流水线（SSE 逐节点推送）；此处汇总视图待后续增量。
-          </p>
-        </div>
+        {runs.length > 0 ? (
+          <ul className="space-y-1.5">
+            {runs.map((r) => (
+              <li key={r.runId}>
+                <Link
+                  href={`/runs/${r.runId}`}
+                  className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs outline-none transition-colors hover:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Play className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="truncate font-medium">{r.intent}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                    {r.status}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-md border border-dashed px-3 py-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              本会话还没有运行记录。提交意图并批准后将出现在这里。
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -35,8 +35,9 @@ public class RunStore {
                     return existing;
                 })
                 .orElseGet(() ->    // 新记录：构造器已设全字段
-                    new RunRecord(result.runId(), req.projectId(), ownerId, req.intent(),
-                        result.status(), result.phase(), result.message(), json, Instant.now()));
+                    new RunRecord(result.runId(), req.projectId(), ownerId, req.sessionId(),
+                        req.intent(), result.status(), result.phase(), result.message(),
+                        json, Instant.now()));
             repo.save(rec);
         } catch (Exception e) {  // 序列化或写库异常都吞掉
             log.warn("RunStore.save failed for runId={}", result.runId(), e);
@@ -75,8 +76,21 @@ public class RunStore {
             .map(RunStore::toSummary).toList();
     }
 
+    /** 按属主 + 会话列出运行（会话工作区运行历史用）。 */
+    public List<RunSummary> listByOwnerAndSession(String ownerId, String sessionId, int limit) {
+        return repo.findByOwnerIdAndSessionIdOrderByCreatedAtDescIdDesc(
+                ownerId, sessionId, PageRequest.of(0, limit)).stream()
+            .map(RunStore::toSummary).toList();
+    }
+
+    /** 按会话列出运行（ADMIN 用，不限属主）。 */
+    public List<RunSummary> listBySession(String sessionId, int limit) {
+        return repo.findBySessionIdOrderByCreatedAtDescIdDesc(sessionId, PageRequest.of(0, limit)).stream()
+            .map(RunStore::toSummary).toList();
+    }
+
     private static RunSummary toSummary(RunRecord r) {
-        return new RunSummary(r.getRunId(), r.getProjectId(), r.getIntent(),
+        return new RunSummary(r.getRunId(), r.getProjectId(), r.getSessionId(), r.getIntent(),
             r.getStatus(), r.getPhase(), r.getMessage(), r.getCreatedAt());
     }
 

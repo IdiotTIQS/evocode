@@ -43,6 +43,7 @@ import {
 export interface UseExecutionOptions {
   projectId: string;
   repoPath?: string;
+  sessionId?: string;
 }
 
 export interface UseExecutionApi {
@@ -69,6 +70,7 @@ function errorDetail(err: unknown): string {
 export function useExecution({
   projectId,
   repoPath,
+  sessionId,
 }: UseExecutionOptions): UseExecutionApi {
   const [snapshot, setSnapshot] = useState<ExecutionSnapshot>(INITIAL_SNAPSHOT);
   const [phaseLabel, setPhaseLabel] = useState<string | undefined>(undefined);
@@ -107,6 +109,7 @@ export function useExecution({
         intent: trimmed,
         projectId,
         ...(repoPath !== undefined ? { repoPath } : {}),
+        ...(sessionId !== undefined ? { sessionId } : {}),
       };
 
       let sawResult = false;
@@ -149,7 +152,7 @@ export function useExecution({
           }
         });
     },
-    [projectId, repoPath]
+    [projectId, repoPath, sessionId]
   );
 
   // 回退：非流式 POST 提交意图。

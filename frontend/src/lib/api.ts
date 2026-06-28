@@ -110,8 +110,11 @@ export async function approveRun(runId: string): Promise<RunResult> {
   return resp.json();
 }
 
-export async function listRuns(limit = 20): Promise<RunSummary[]> {
-  const resp = await authFetch(`${BASE}/api/runs?limit=${limit}`);
+export async function listRuns(limit = 20, sessionId?: string): Promise<RunSummary[]> {
+  const qs = sessionId !== undefined
+    ? `?limit=${limit}&sessionId=${encodeURIComponent(sessionId)}`
+    : `?limit=${limit}`;
+  const resp = await authFetch(`${BASE}/api/runs${qs}`);
   if (!resp.ok) throw new ControlPlaneError(resp.status);
   return resp.json();
 }

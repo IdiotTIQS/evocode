@@ -5,6 +5,7 @@ import java.time.Instant;
 public record RunSummary(
     String runId,
     String projectId,
+    String sessionId,
     String intent,
     String status,
     String phase,

@@ -108,4 +108,28 @@ class RunControllerTest {
         mvc.perform(get("/api/runs/nope").header("Authorization", alice))
             .andExpect(status().isNotFound());
     }
+
+    @Test
+    void list_filtered_by_session_returns_only_that_sessions_runs() throws Exception {
+        // 两次提交分别带不同 sessionId（runtime mock 返回不同 runId）。
+        when(runtimeClient.createRun(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(sample("r-s1", "waiting_approval", "plan", "architected"));
+        mvc.perform(post("/api/intents").header("Authorization", alice)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"intent\":\"a\",\"projectId\":\"p\",\"sessionId\":\"sess-1\"}"))
+            .andExpect(status().isOk());
+
+        when(runtimeClient.createRun(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(sample("r-s2", "waiting_approval", "plan", "architected"));
+        mvc.perform(post("/api/intents").header("Authorization", alice)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"intent\":\"b\",\"projectId\":\"p\",\"sessionId\":\"sess-2\"}"))
+            .andExpect(status().isOk());
+
+        mvc.perform(get("/api/runs").param("sessionId", "sess-1").header("Authorization", alice))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].runId").value("r-s1"))
+            .andExpect(jsonPath("$[0].sessionId").value("sess-1"));
+    }
 }

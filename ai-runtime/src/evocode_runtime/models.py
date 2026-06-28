@@ -7,6 +7,8 @@ class IntentRequest(BaseModel):
     intent: str = Field(min_length=1)
     project_id: str = Field(min_length=1, alias="projectId")
     repo_path: str | None = Field(default=None, alias="repoPath")
+    # 控制平面层的会话关联；运行时不消费，仅声明以使契约显式（避免 payload 漂移被静默吞掉）。
+    session_id: str | None = Field(default=None, alias="sessionId")
 
 
 class EngineeringTask(BaseModel):

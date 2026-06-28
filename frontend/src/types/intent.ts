@@ -3,6 +3,7 @@ export interface IntentRequest {
   intent: string;
   projectId: string;
   repoPath?: string;
+  sessionId?: string;  // 会话工作区提交时带上，关联 run 与 session
 }
 
 export type TaskKind = "frontend" | "backend" | "test" | "generic";
@@ -78,6 +79,7 @@ export interface RunResult {
 export interface RunSummary {
   runId: string;
   projectId: string;
+  sessionId?: string | null;  // 关联会话；非会话工作区提交可空
   intent: string;
   status: string;
   phase: string;

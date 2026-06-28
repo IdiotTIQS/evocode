@@ -137,6 +137,7 @@ export default function SessionWorkspacePage() {
         className="hidden w-72 shrink-0 xl:flex"
         project={project}
         latestResult={latestResult}
+        sessionId={session.id}
       />
     </div>
   );
