@@ -20,6 +20,20 @@ export async function submitIntent(req: IntentRequest): Promise<RunResult> {
   return resp.json();
 }
 
+/**
+ * 批准当前审批门：让运行时从 checkpoint 越过该门到下一个门或完成。
+ * plan gate 批准 → 返回 diff gate（生成 changeSet，仍未落盘）；
+ * diff gate 批准 → 返回 completed（已落盘）。
+ */
+export async function approveRun(runId: string): Promise<RunResult> {
+  const resp = await fetch(
+    `${BASE}/api/runs/${encodeURIComponent(runId)}/approve`,
+    { method: "POST" }
+  );
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return resp.json();
+}
+
 export async function listRuns(limit = 20): Promise<RunSummary[]> {
   const resp = await fetch(`${BASE}/api/runs?limit=${limit}`);
   if (!resp.ok) throw new ControlPlaneError(resp.status);

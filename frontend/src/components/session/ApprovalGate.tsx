@@ -49,6 +49,37 @@ export function ApprovalGate({
                 </p>
               </div>
 
+              {plan.tasks.length > 0 ? (
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    工程任务（后端规划阶段产出）
+                  </span>
+                  <ul className="space-y-1.5">
+                    {plan.tasks.map((task, i) => (
+                      <li
+                        key={task.id}
+                        className="rounded-md border bg-muted/40 px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {i + 1}.
+                          </span>
+                          <span className="text-sm font-medium">{task.title}</span>
+                          <Badge variant="outline" className="ml-auto font-normal">
+                            {task.kind}
+                          </Badge>
+                        </div>
+                        {task.description ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {task.description}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">
                   将执行的流水线
@@ -67,7 +98,6 @@ export function ApprovalGate({
                 </ol>
               </div>
 
-              {/* 诚实标注：后端无独立规划端点，计划预览为意图摘要。 */}
               <p className="text-xs text-muted-foreground">{plan.note}</p>
             </div>
           ) : null}
@@ -101,7 +131,7 @@ export function ApprovalGate({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          代码已生成并通过验证。请审查变更集，批准后视为确认应用。
+          代码已生成但<strong>尚未写入磁盘</strong>。请审查变更集，批准后才会应用（写入 evocode_generated/）。
         </p>
 
         {changeSet.length > 0 ? (
@@ -126,16 +156,9 @@ export function ApprovalGate({
           <p className="text-sm text-muted-foreground">本次未生成文件变更。</p>
         )}
 
-        {/* 诚实标注：当前生成物已写入 evocode_generated/，应用为确认动作。 */}
+        {/* 后端在 apply 节点前真实中断：批准前磁盘零写入，拒绝无需回滚。 */}
         <p className="text-xs text-muted-foreground">
-          应用说明：当前生成物已写入 evocode_generated/，此处为确认动作。
-          {/* TODO(backend): apply changes 端点；当前生成物已写入 evocode_generated/ */}
-        </p>
-
-        {/* 诚实标注：拒绝不回滚磁盘文件（暂无 rollback 端点）。 */}
-        <p className="text-xs text-muted-foreground">
-          注意：拒绝仅重置会话；已写入 evocode_generated/ 的文件不会自动回滚，需手动清理。
-          {/* TODO(backend): rollback 端点 */}
+          拒绝将丢弃本次变更并重置会话；由于批准前未写入任何文件，无需手动清理。
         </p>
 
         <div className="flex flex-wrap justify-end gap-2">

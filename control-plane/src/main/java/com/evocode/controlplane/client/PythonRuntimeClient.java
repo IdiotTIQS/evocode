@@ -28,4 +28,12 @@ public class PythonRuntimeClient {
             .retrieve()
             .body(RunResult.class);
     }
+
+    /** 批准后续跑：让 Python 运行时从 checkpoint 越过当前审批门到下一个门或完成。 */
+    public RunResult resumeRun(String runId) {
+        return restClient.post()
+            .uri("/runs/{runId}/resume", runId)
+            .retrieve()
+            .body(RunResult.class);
+    }
 }

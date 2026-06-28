@@ -20,7 +20,7 @@ class RunStoreTest {
 
     private RunResult sampleResult(String runId) {
         return new RunResult(
-            runId, "completed", "reviewed",
+            runId, "completed", null, "reviewed",
             new TaskGraph(List.of(new EngineeringTask("t1", "前端页面", "frontend", "做页面"))),
             null, List.of(), List.of(), null,
             new ReviewOutput("approve", List.of(), "ok"),

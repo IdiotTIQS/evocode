@@ -83,8 +83,14 @@ class ReviewOutput(BaseModel):
 
 class RunResult(BaseModel):
     run_id: str = Field(alias="runId")
-    status: Literal["completed", "failed"]
+    # waiting_approval：图已在某个审批门前真实中断（checkpoint 持有，未越过该门）。
+    status: Literal["waiting_approval", "completed", "failed"]
     phase: str
+    # 当 status == waiting_approval 时指明卡在哪个门：
+    #   "plan" → 已规划，等待批准后才生成代码（磁盘零写入）
+    #   "diff" → 已生成 changeSet，等待批准后才落盘（磁盘仍零写入）
+    # 其余状态为 None。
+    gate: "Literal['plan', 'diff'] | None" = Field(default=None)
     task_graph: TaskGraph = Field(alias="taskGraph")
     message: str
     graph_stats: "ProjectGraphStats | None" = Field(default=None, alias="graphStats")

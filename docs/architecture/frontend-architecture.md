@@ -1,12 +1,12 @@
 # Frontend Architecture
 
-> **实现状态（截至 increment 7） / Implementation Status (as of increment 7)**
+> **实现状态（截至 increment 8） / Implementation Status (as of increment 8)**
 > 前端已从单页控制台演进为**多路由 Agent Workspace**。本横幅区分「真实后端」「客户端本地持久化」「客户端模拟」三类能力，避免把模拟当作已落地的后端。
 >
 > - ✅ **已构建（UI + 路由）**：多路由 Agent Workspace —— Dashboard、Projects 列表、Project Tabs（Overview / Sessions / Runs / Graph / Settings）、Session 三栏工作区（左会话史 / 中交互 / 右上下文）、Run 详情页、审批门（Approval Gate）。技术栈：Next.js 15.5.x（App Router，含 `(workspace)` 路由组与 Server Component 重定向）、React 19、TypeScript（strict）、Tailwind CSS、pnpm。
-> - ✅ **真实后端**：意图提交一次性同步跑完整流水线 —— `POST /api/intents`（`src/lib/api.ts` 的 `submitIntent`）、`GET /api/runs/{id}`（`getRun`）。Run 详情与结果渲染（taskGraph / changeSet / verification / review）消费的是真实返回。
+> - ✅ **真实后端 — 两段式审批门**：意图提交后后端**真实中断**于代码生成前，需人工批准两次才落盘 —— `POST /api/intents`（`submitIntent`，跑 understand→plan→architect 后停在 plan gate，返回 `status=waiting_approval`/`gate=plan` + 真实 TaskGraph，磁盘零写入）、`POST /api/runs/{id}/approve`（`approveRun`，第一次 resume 越过 generate 门生成 changeSet 停在 diff gate 仍不落盘；第二次 resume 越过 apply 门落盘并 completed）、`GET /api/runs/{id}`（`getRun`）。底层为 LangGraph `interrupt_before=["generate","apply"]` + checkpointer。所有审批暂停均为**后端真实状态**，兑现「绝不在提交意图后立即执行代码变更」。
 > - 🟡 **客户端本地持久化（localStorage，待后端）**：Project 与 Session 实体及其消息历史保存在浏览器 `localStorage`（`src/lib/stores/`，含 `typeof window` SSR 守卫）。刷新保留，但不跨设备、无后端 CRUD。`// TODO(backend)`：接入 Project/Session API 后只换 store 适配器。
-> - 🟡 **客户端模拟 + 真实暂停审批（待后端 SSE / staged API）**：审批门与执行进度由客户端状态机编排（`src/lib/execution/`）。后端是「一把梭」——没有独立 `/plan`、没有 SSE 流、没有 `/apply` 端点。因此：plan 阶段为进度模拟；**plan gate 与 diff gate 是真实暂停**，批准前绝不调用 `submitIntent`（兑现「绝不在提交意图后立即执行代码变更」）；coding/testing/reviewing 为模拟文案推进，但 changeSet / verification / review 是 `submitIntent` 的真实返回。`// TODO(backend)`：接入 staged API + SSE 后替换模拟段。
+> - 🟡 **阶段进度文案（待 SSE 细化）**：planning/coding/reviewing 的文案由真实请求的「在途/完成」驱动（非定时器模拟），但仍是单次 approve 往返粒度，非逐节点实时推送。`// TODO(backend)`：接入逐节点 SSE 流后细化为实时阶段事件。另：待批准 checkpoint 当前由运行时 MemorySaver 持有（进程重启丢失），`// TODO(backend)`：换持久化 checkpointer。
 > - 📋 **计划中**：知识图谱可视化（Project Graph，目前为占位页）、多租户 Org（类型已留位，当前隐式单租户）。
 
 ## Overview
@@ -52,7 +52,7 @@ The legacy single-page `/console` has been retired and now redirects to `/dashbo
 | `/projects/[projectId]/runs` | 项目下运行列表 | ✅ UI |
 | `/projects/[projectId]/graph` | 知识图谱 | 📋 占位页（计划中） |
 | `/projects/[projectId]/settings` | 项目设置 | ✅ UI（🟡 本地持久化） |
-| `/sessions/[sessionId]` | Session 三栏工作区（会话史 / 交互 / 上下文 + 审批门） | ✅ UI（🟡 本地会话 + 🟡 模拟执行 / ✅ 真实 submitIntent） |
+| `/sessions/[sessionId]` | Session 三栏工作区（会话史 / 交互 / 上下文 + 审批门） | ✅ UI（🟡 本地会话 / ✅ 真实两段式审批门后端） |
 | `/runs/[runId]` | Run 详情：pipeline / 结果 tabs（timeline·logs·files·verify·review） | ✅ UI + ✅ 真实 `GET /api/runs/{id}` |
 | `/settings` | 全局设置 | ✅ UI |
 
@@ -119,33 +119,33 @@ src/
 │   ├── ui/                            # shadcn 基础件
 │   └── SiteNav / Hero / CTA / …       # 落地页区块（CTA 已指向 /dashboard）
 ├── lib/
-│   ├── api.ts                         # Control Plane 客户端（submitIntent / getRun）
+│   ├── api.ts                         # Control Plane 客户端（submitIntent / approveRun / getRun）
 │   ├── stores/                        # 🟡 localStorage 持久化：storage.ts（SSR 守卫）,
 │   │                                  #   projectStore.ts, sessionStore.ts
-│   └── execution/                     # 🟡 审批门状态机：executionMachine.ts（纯 TS）,
-│                                      #   useExecution.ts（驱动定时器/网络副作用）
+│   └── execution/                     # ✅ 审批门状态机：executionMachine.ts（纯 TS）,
+│                                      #   useExecution.ts（驱动真实后端两段式端点）
 └── types/
     ├── domain.ts                      # 领域模型：Org/Project/Session/SessionMessage/
     │                                  #   ExecutionState(8 态)/RunResult/RunSummary
     └── intent.ts                      # 意图/运行结果契约（对齐 contracts/）
 ```
 
-`session/ApprovalGate` 与 `lib/execution/` 共同实现审批门：plan gate 与 diff gate 真实暂停，批准前绝不调用后端；进度推进为客户端模拟，而 changeSet / verification / review 是 `submitIntent` 的真实返回（见上方实现状态横幅）。
+`session/ApprovalGate` 与 `lib/execution/` 共同实现审批门：plan gate 与 diff gate 均为**后端真实中断**（LangGraph `interrupt_before`），批准前磁盘零写入；`submitIntent` 返回真实 TaskGraph，`approveRun` 两次往返依次返回真实 changeSet 与最终 verification / review（见上方实现状态横幅）。
 
 ---
 
 ## Communication with the Control Plane
 
-> **实现状态**：当前仅 `POST /api/intents`（一次性同步跑完整流水线）与 `GET /api/runs/{id}`（拉取运行状态/结果）**真实可用**。下方 `/stream`（SSE）、approve/reject、`/api/projects/{id}/graph` 为 📋 计划中——后端对应端点尚未实现，前端的审批暂停与进度推进目前为客户端编排+模拟（见顶部实现状态横幅）。
+> **实现状态**：`POST /api/intents`（提交意图，跑到 plan gate 真实中断）、`POST /api/runs/{id}/approve`（批准当前门并 resume）、`GET /api/runs/{id}`（拉取运行状态/结果）**真实可用**。下方 `/stream`（SSE）、`/reject`、`/api/projects/{id}/graph` 为 📋 计划中——后端对应端点尚未实现；当前「拒绝」在前端重置会话（后端批准前未落盘，无需回滚），阶段进度为单次 approve 往返粒度（见顶部实现状态横幅）。
 
 The frontend communicates with the Spring Boot Control Plane exclusively. It never calls the AI Runtime or Business Services directly.
 
-**POST /api/intents** — submit an intent, receive a run ID  
-**GET /api/runs/{id}** — poll run status and results  
-**GET /api/runs/{id}/stream** — Server-Sent Events stream for live agent activity  
-**POST /api/runs/{id}/approve** — approve a plan or diff  
-**POST /api/runs/{id}/reject** — reject with feedback  
-**GET /api/projects/{id}/graph** — fetch the knowledge graph for visualization  
+**POST /api/intents** — submit an intent; backend runs understand→plan→architect then interrupts before code generation, returning `waiting_approval`/`gate=plan` + the TaskGraph (no files written) ✅  
+**POST /api/runs/{id}/approve** — approve the current gate and resume: plan gate → generates changeSet, stops at diff gate (still no files written); diff gate → applies to disk and completes ✅  
+**GET /api/runs/{id}** — poll run status and results ✅  
+**GET /api/runs/{id}/stream** — Server-Sent Events stream for live agent activity 📋  
+**POST /api/runs/{id}/reject** — reject with feedback 📋  
+**GET /api/projects/{id}/graph** — fetch the knowledge graph for visualization 📋  
 
 All request and response types mirror the schemas in `contracts/`.
 

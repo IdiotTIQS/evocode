@@ -97,32 +97,31 @@ def architect_node(state: RunState) -> dict:
 
 
 def generate_node(state: RunState) -> dict:
-    """把任务物化为真实代码文件，写入目标 repo 的 evocode_generated/ 子目录。
+    """把任务物化为代码文件内容（changeSet），但**不落盘**。
 
-    消费架构师笔记决定文件落点与模式。无 repoPath 时仍生成 changeSet（内容可见）
-    但不落盘。绝不让 /runs 失败。"""
+    消费架构师笔记决定文件落点与模式。落盘改由 apply_node 负责，且仅在用户
+    批准 diff 后（越过 interrupt_before=["apply"] 门）才执行——兑现「批准前
+    磁盘零写入」。绝不让 /runs 失败。"""
     intent = state["intent"]
     tasks = state.get("tasks") or []
     notes = state.get("architectureNotes") or []
-    repo_path = state.get("repoPath") or ""
     try:
         change_set = generate_change_set(tasks, intent, notes)
     except Exception:  # noqa: BLE001
         logger.exception("generate_node failed to build change set for project %s",
                           state.get("projectId"))
-        return {"changeSet": [], "applied": [], "phase": "generated"}
-    applied: list[str] = []
-    if repo_path and os.path.isdir(repo_path):
-        try:
-            applied = apply_change_set(repo_path, change_set)
-        except Exception:  # noqa: BLE001  写盘失败不影响 changeSet 返回
-            logger.exception("generate_node failed to apply change set to %s", repo_path)
-            applied = []
-    return {"changeSet": change_set, "applied": applied, "phase": "generated"}
+        return {"changeSet": [], "phase": "generated"}
+    return {"changeSet": change_set, "phase": "generated"}
 
 
 def verify_node(state: RunState) -> dict:
-    """对目标 repo（含刚生成的文件）跑只读静态类型检查，产出现实裁定。"""
+    """对目标 repo 跑只读静态类型检查，产出现实裁定。
+
+    诚实限制：本节点在 apply_node 之前运行（generate→verify→review→[diff gate]→apply），
+    此时 changeSet 尚未落盘，因此 tsc 检查的是【生成前】的 repo 状态，不覆盖本次生成的
+    文件。这是为兑现「批准 diff 前磁盘零写入」而做的取舍。
+    TODO(backend): 若需对生成文件做类型检查，应在 apply 之后增设 verify 阶段（需额外门或
+    后置检查），避免在批准前写盘。"""
     repo_path = state.get("repoPath") or ""
     not_checked = {"checked": False, "passed": False, "diagnosticCount": 0, "diagnostics": []}
     if not (repo_path and os.path.isdir(repo_path)):
@@ -156,3 +155,21 @@ def review_node(state: RunState) -> dict:
         review = {"verdict": "approve", "findings": [],
                   "summary": "审查阶段内部错误，已跳过。"}
     return {"review": review, "phase": "reviewed"}
+
+
+def apply_node(state: RunState) -> dict:
+    """落盘阶段：把已批准的 changeSet 写入目标 repo 的 evocode_generated/ 子目录。
+
+    仅在用户批准 diff 后（图越过 interrupt_before=["apply"] 门）才执行，是整条
+    流水线中唯一发生磁盘写入的节点。无 repoPath 或写盘失败时仍返回（applied 为空），
+    绝不让 /runs 失败。"""
+    change_set = state.get("changeSet") or []
+    repo_path = state.get("repoPath") or ""
+    applied: list[str] = []
+    if repo_path and os.path.isdir(repo_path):
+        try:
+            applied = apply_change_set(repo_path, change_set)
+        except Exception:  # noqa: BLE001  写盘失败不影响结果返回
+            logger.exception("apply_node failed to apply change set to %s", repo_path)
+            applied = []
+    return {"applied": applied, "phase": "applied"}

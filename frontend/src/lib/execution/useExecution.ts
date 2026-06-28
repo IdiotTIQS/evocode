@@ -1,26 +1,32 @@
 // frontend/src/lib/execution/useExecution.ts
-// React hook：封装审批门状态机，管理 ExecutionState 流转、定时器副作用与错误。
+// React hook：封装审批门状态机，对接后端真实两段式端点（无客户端进度模拟）。
 //
 // 诚实编排（见 executionMachine.ts 顶部说明）：
-//   submitIntent(text) → planning 模拟 → 停在 plan gate（真实暂停，不调后端）
-//   approvePlan()      → coding/testing/reviewing 模拟推进，期间真实调用 submitIntent
-//                        → 停在 diff gate（展示 changeSet）
-//   approveDiff()      → completed
-//   reject()           → 回初始态
-// 所有定时器在卸载/重置时清理，防 setState-after-unmount。
+//   submitIntent(text) → POST /api/intents → 后端跑到 plan gate 真实中断
+//                        → 停在 plan gate，展示真实 TaskGraph（磁盘零写入）
+//   approvePlan()      → POST /api/runs/{id}/approve → 后端 resume 到 diff gate
+//                        → 停在 diff gate，展示真实 changeSet（仍未落盘）
+//   approveDiff()      → POST /api/runs/{id}/approve → 后端 resume 落盘并完成 → completed
+//   reject()           → 回初始态（后端批准前未落盘，无需回滚）
+//
+// 关键约束：提交意图后绝不立即执行代码变更——后端在 generate 前真实中断，
+// 真正的代码生成只在 approvePlan 之后发生，落盘只在 approveDiff 之后发生。
+// inFlightRef 防止任一阶段请求在途时重复触发（双击）。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
-import { submitIntent as apiSubmitIntent, ControlPlaneError } from "@/lib/api";
+import {
+  approveRun as apiApproveRun,
+  submitIntent as apiSubmitIntent,
+  ControlPlaneError,
+} from "@/lib/api";
 import type { ExecutionState, RunResult } from "@/types/domain";
 import {
   type ApprovalGateKind,
   type ExecutionSnapshot,
   type PlanPreview,
-  CODING_PHASES,
   INITIAL_SNAPSHOT,
-  PLANNING_PHASES,
-  advanceTo,
+  beginApplying,
   beginCoding,
   complete,
   fail,
@@ -41,7 +47,7 @@ export interface UseExecutionApi {
   plan?: PlanPreview;
   result?: RunResult;
   error?: string;
-  /** 当前模拟阶段文案（planning/coding/testing/reviewing 时有值）。 */
+  /** 当前阶段文案（请求在途时有值）。 */
   phaseLabel?: string;
   submitIntent: (text: string) => void;
   approvePlan: () => void;
@@ -51,6 +57,11 @@ export interface UseExecutionApi {
   reset: () => void;
 }
 
+function errorDetail(err: unknown): string {
+  if (err instanceof ControlPlaneError) return `控制平面错误 ${err.status}`;
+  return "无法连接控制平面";
+}
+
 export function useExecution({
   projectId,
   repoPath,
@@ -58,185 +69,143 @@ export function useExecution({
   const [snapshot, setSnapshot] = useState<ExecutionSnapshot>(INITIAL_SNAPSHOT);
   const [phaseLabel, setPhaseLabel] = useState<string | undefined>(undefined);
 
-  // 保存待批准的意图（plan gate 真实暂停期间持有，批准后才用它调后端）。
-  const pendingIntentRef = useRef<string>("");
-  // 防重入锁：批准计划后到组件重渲染卸载按钮之间，快速双击会触发两次
-  // apiSubmitIntent（两次完整流水线 + 两次落盘）。此 ref 在 approvePlan 一进入
-  // 就置位，complete/fail/reset 时复位，确保 apiSubmitIntent 绝不被双击调用两次。
+  // 当前 run 的 id（plan gate 之后用于 resume）。
+  const runIdRef = useRef<string>("");
+  // 防重入锁：任一阶段请求在途时置位，杜绝双击触发重复后端调用。
   const inFlightRef = useRef(false);
-  // 跟踪所有挂起的定时器，便于统一清理。
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  // 卸载标记，阻止 setState-after-unmount。
-  const mountedRef = useRef(true);
+  // 在途请求代次：每次发起请求自增；其 .then/.catch 落地时校验代次未变，
+  // 否则说明期间发生了 reject/reset/新提交，丢弃这个迟到的响应（防止
+  // 拒绝后迟到的成功响应把 UI 又弹回审批门/完成态）。
+  const genRef = useRef(0);
 
-  const clearTimers = useCallback(() => {
-    for (const t of timersRef.current) clearTimeout(t);
-    timersRef.current = [];
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      // 卸载时清掉所有定时器。
-      for (const t of timersRef.current) clearTimeout(t);
-      timersRef.current = [];
-    };
-  }, []);
-
-  const safeSet = useCallback((next: ExecutionSnapshot) => {
-    if (mountedRef.current) setSnapshot(next);
-  }, []);
-
-  const safeSetLabel = useCallback((label: string | undefined) => {
-    if (mountedRef.current) setPhaseLabel(label);
-  }, []);
-
-  // 提交意图：进入 planning 模拟，结束后停在 plan gate。绝不调用后端。
+  // 提交意图：调用真实后端，跑到 plan gate（后端在 generate 前中断）。绝不落盘。
   const submitIntent = useCallback(
     (text: string) => {
       const trimmed = text.trim();
-      if (trimmed.length === 0) return;
+      if (trimmed.length === 0 || inFlightRef.current) return;
 
-      clearTimers();
-      pendingIntentRef.current = trimmed;
+      inFlightRef.current = true;
+      const gen = ++genRef.current;
+      runIdRef.current = "";
+      setSnapshot(startPlanning());
+      setPhaseLabel("正在理解意图、规划工程任务…");
 
-      const planning = startPlanning(trimmed);
-      safeSet(planning);
-
-      // 客户端模拟 planning 阶段文案推进。
-      // // TODO(backend): replace with real SSE stream from /api/runs/{id}/stream
-      let cursor = 0;
-      const runNext = () => {
-        if (cursor >= PLANNING_PHASES.length) {
-          // planning 模拟结束 → 真实暂停于 plan gate。
-          safeSetLabel(undefined);
-          safeSet(reachPlanGate(planning));
-          return;
-        }
-        const phase = PLANNING_PHASES[cursor]!;
-        safeSetLabel(phase.label);
-        cursor += 1;
-        const timer = setTimeout(runNext, phase.delayMs);
-        timersRef.current.push(timer);
-      };
-      runNext();
+      apiSubmitIntent({
+        intent: trimmed,
+        projectId,
+        ...(repoPath !== undefined ? { repoPath } : {}),
+      })
+        .then((res) => {
+          if (genRef.current !== gen) return; // 已被 reject/reset/新提交取代
+          inFlightRef.current = false;
+          setPhaseLabel(undefined);
+          if (res.status === "failed") {
+            setSnapshot(fail({ state: "planning" }, res.message || "规划失败"));
+            return;
+          }
+          runIdRef.current = res.runId;
+          // 后端应返回 waiting_approval/plan，携带真实 TaskGraph。
+          setSnapshot(reachPlanGate(trimmed, res.taskGraph?.tasks ?? []));
+        })
+        .catch((err: unknown) => {
+          if (genRef.current !== gen) return;
+          inFlightRef.current = false;
+          setPhaseLabel(undefined);
+          setSnapshot(fail({ state: "planning" }, errorDetail(err)));
+        });
     },
-    [clearTimers, safeSet, safeSetLabel]
+    [projectId, repoPath]
   );
 
-  // 批准计划：现在才真正执行——模拟 coding/testing/reviewing 推进，期间调用后端。
+  // 批准计划：resume 后端越过 generate 门，生成 changeSet 后停在 diff gate（仍不落盘）。
   const approvePlan = useCallback(() => {
-    // 防重入守卫：必须处于 plan gate 的合法待批准态，且无在途流水线。
-    // 双重保险：状态校验（双击第二次时已切出 waiting_approval）+ inFlightRef。
     if (
       inFlightRef.current ||
       snapshot.state !== "waiting_approval" ||
-      snapshot.gate !== "plan"
+      snapshot.gate !== "plan" ||
+      runIdRef.current.length === 0
     ) {
       return;
     }
 
-    const intent = pendingIntentRef.current;
-    if (intent.length === 0) return;
-
-    // 立即上锁并切出 waiting_approval（beginCoding 会改状态），
-    // 使按钮条件不再满足，杜绝双击触发第二次 apiSubmitIntent。
     inFlightRef.current = true;
-    clearTimers();
-    const codingStart = beginCoding(snapshot);
-    safeSet(codingStart);
+    const gen = ++genRef.current;
+    const coding = beginCoding(snapshot);
+    setSnapshot(coding);
+    setPhaseLabel("正在生成代码变更…");
 
-    // 真实网络调用（批准后才发起，兑现「批准后才执行」）。它同步跑完整流水线。
-    const fetchPromise = apiSubmitIntent({
-      intent,
-      projectId,
-      ...(repoPath !== undefined ? { repoPath } : {}),
-    });
-
-    // 并行：客户端模拟阶段文案推进（coding→testing→reviewing）。
-    // // TODO(backend): replace with real SSE stream from /api/runs/{id}/stream
-    let cursor = 0;
-    let current = codingStart;
-    const runPhase = () => {
-      if (cursor >= CODING_PHASES.length) {
-        // 模拟阶段跑完，等待真实结果落地后进入 diff gate（见下方 then）。
-        return;
-      }
-      const phase = CODING_PHASES[cursor]!;
-      current = advanceTo(current, phase.state);
-      safeSet(current);
-      safeSetLabel(phase.label);
-      cursor += 1;
-      const timer = setTimeout(runPhase, phase.delayMs);
-      timersRef.current.push(timer);
-    };
-    runPhase();
-
-    fetchPromise
-      .then((runResult) => {
-        if (!mountedRef.current) return;
-        if (runResult.status === "failed") {
-          inFlightRef.current = false;
-          clearTimers();
-          safeSetLabel(undefined);
-          safeSet(fail(current, runResult.message || "运行失败"));
+    apiApproveRun(runIdRef.current)
+      .then((res) => {
+        if (genRef.current !== gen) return; // 已被 reject/reset 取代
+        inFlightRef.current = false;
+        setPhaseLabel(undefined);
+        if (res.status === "failed") {
+          setSnapshot(fail(coding, res.message || "代码生成失败"));
           return;
         }
-        // 真实结果就绪：停在 diff gate 展示 changeSet。
-        // 若模拟阶段还没跑完，给最短一个延迟确保 UI 至少经过 reviewing 文案。
-        const finalize = () => {
-          if (!mountedRef.current) return;
-          inFlightRef.current = false;
-          clearTimers();
-          safeSetLabel(undefined);
-          safeSet(reachDiffGate({ ...current, state: "reviewing" }, runResult));
-        };
-        // 等剩余模拟阶段大致结束再进入 diff gate，避免文案一闪而过。
-        const remaining = Math.max(0, CODING_PHASES.length - cursor) * 200;
-        const timer = setTimeout(finalize, remaining);
-        timersRef.current.push(timer);
+        setSnapshot(reachDiffGate(coding, res));
       })
       .catch((err: unknown) => {
-        if (!mountedRef.current) return;
+        if (genRef.current !== gen) return;
         inFlightRef.current = false;
-        clearTimers();
-        safeSetLabel(undefined);
-        const detail =
-          err instanceof ControlPlaneError
-            ? `控制平面错误 ${err.status}`
-            : "无法连接控制平面";
-        safeSet(fail(current, detail));
+        setPhaseLabel(undefined);
+        setSnapshot(fail(coding, errorDetail(err)));
       });
-  }, [snapshot, projectId, repoPath, clearTimers, safeSet, safeSetLabel]);
+  }, [snapshot]);
 
-  // 批准 diff → completed。应用动作当前为确认（生成物已写入 evocode_generated/）。
-  // // TODO(backend): apply changes 端点；当前生成物已写入 evocode_generated/，此处为确认动作。
+  // 批准 diff：resume 后端越过 apply 门，落盘并完成。
   const approveDiff = useCallback(() => {
-    // 防重入守卫：必须处于 diff gate 的合法待批准态。
-    if (snapshot.state !== "waiting_approval" || snapshot.gate !== "diff") {
+    if (
+      inFlightRef.current ||
+      snapshot.state !== "waiting_approval" ||
+      snapshot.gate !== "diff" ||
+      runIdRef.current.length === 0
+    ) {
       return;
     }
-    clearTimers();
-    safeSet(complete(snapshot));
-  }, [snapshot, clearTimers, safeSet]);
 
-  // 拒绝任意 gate → 回初始态。
+    inFlightRef.current = true;
+    const gen = ++genRef.current;
+    const applying = beginApplying(snapshot);
+    setSnapshot(applying);
+    setPhaseLabel("正在应用变更（写入 evocode_generated/）…");
+
+    apiApproveRun(runIdRef.current)
+      .then((res) => {
+        if (genRef.current !== gen) return; // 已被 reject/reset 取代
+        inFlightRef.current = false;
+        setPhaseLabel(undefined);
+        if (res.status === "failed") {
+          setSnapshot(fail(applying, res.message || "应用失败"));
+          return;
+        }
+        setSnapshot(complete(applying, res));
+      })
+      .catch((err: unknown) => {
+        if (genRef.current !== gen) return;
+        inFlightRef.current = false;
+        setPhaseLabel(undefined);
+        setSnapshot(fail(applying, errorDetail(err)));
+      });
+  }, [snapshot]);
+
+  // 拒绝任意 gate → 回初始态。后端批准前未落盘，无需回滚。
+  // 自增 genRef 使任何在途请求的 .then/.catch 落地时被丢弃，避免迟到响应弹回审批门。
   const reject = useCallback(() => {
+    genRef.current += 1;
     inFlightRef.current = false;
-    clearTimers();
-    pendingIntentRef.current = "";
-    safeSetLabel(undefined);
-    safeSet(rejectGate());
-  }, [clearTimers, safeSet, safeSetLabel]);
+    runIdRef.current = "";
+    setPhaseLabel(undefined);
+    setSnapshot(rejectGate());
+  }, []);
 
   const reset = useCallback(() => {
+    genRef.current += 1;
     inFlightRef.current = false;
-    clearTimers();
-    pendingIntentRef.current = "";
-    safeSetLabel(undefined);
-    safeSet({ ...INITIAL_SNAPSHOT });
-  }, [clearTimers, safeSet, safeSetLabel]);
+    runIdRef.current = "";
+    setPhaseLabel(undefined);
+    setSnapshot({ ...INITIAL_SNAPSHOT });
+  }, []);
 
   return {
     state: snapshot.state,

@@ -57,4 +57,12 @@ public class RunRecord {
     public String getMessage() { return message; }
     public String getResultJson() { return resultJson; }
     public Instant getCreatedAt() { return createdAt; }
+
+    /** 刷新随审批门推进而变化的字段（runId/projectId/intent/createdAt 不变）。 */
+    public void update(String status, String phase, String message, String resultJson) {
+        this.status = status;
+        this.phase = phase;
+        this.message = message;
+        this.resultJson = resultJson;
+    }
 }

@@ -3,10 +3,10 @@
 // 中栏（主交互）：当前 session 标题 + 意图输入 + 审批门状态机驱动的执行流。
 //
 // 本任务用 useExecution 替换 Task 6 的直接 submitIntent：
-//   提交意图 → planning → 【真实暂停】plan gate（批准前不调后端）
-//   批准计划 → coding/testing/reviewing（此时才真正调 submitIntent）→ diff gate
-//   批准 diff → completed（渲染 ResultTabs）。
-// PipelineStepper 通过 mapStateToStepper 把 8 态 ExecutionState 映射到现有 phase
+//   提交意图 → planning →【真实暂停】plan gate（后端在 generate 前中断，磁盘零写入）
+//   批准计划 → coding（resume 生成 changeSet）→ diff gate（仍未落盘）
+//   批准 diff → reviewing（resume 落盘）→ completed（渲染 ResultTabs）。
+// PipelineStepper 通过 mapStateToStepper 把 ExecutionState 映射到现有 phase
 // 字符串（不改 PipelineStepper，保持 Run 详情页复用）。
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -156,7 +156,7 @@ export function SessionCenter({
         <div className="space-y-6">
           <PipelineStepper phase={stepper.phase} done={stepper.done} />
 
-          {/* 模拟阶段文案（planning/coding/testing/reviewing）。 */}
+          {/* 阶段文案（请求在途时显示，由真实后端往返驱动）。 */}
           {exec.phaseLabel ? (
             <p
               className="text-sm text-muted-foreground motion-safe:animate-pulse"

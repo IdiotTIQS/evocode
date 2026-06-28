@@ -61,7 +61,10 @@ export interface ReviewOutput {
 
 export interface RunResult {
   runId: string;
-  status: "completed" | "failed";
+  // waiting_approval：后端已在某审批门前真实中断（plan/diff），等待批准后才继续。
+  status: "waiting_approval" | "completed" | "failed";
+  // 当 status === waiting_approval 时指明卡在哪个门；其余为 null/缺省。
+  gate?: "plan" | "diff" | null;
   phase: string;
   taskGraph: TaskGraph;
   graphStats?: ProjectGraphStats;

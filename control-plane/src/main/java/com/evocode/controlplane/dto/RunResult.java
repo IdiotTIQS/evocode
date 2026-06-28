@@ -5,6 +5,7 @@ import java.util.List;
 public record RunResult(
     String runId,
     String status,
+    String gate,
     String phase,
     TaskGraph taskGraph,
     ProjectGraphStats graphStats,

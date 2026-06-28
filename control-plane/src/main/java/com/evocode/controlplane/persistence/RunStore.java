@@ -25,17 +25,42 @@ public class RunStore {
         this.mapper = mapper;
     }
 
-    /** 持久化一次运行。序列化失败时记录日志但不抛出（绝不拖垮 /api/intents）。 */
+    /** 持久化一次运行（按 runId upsert）。序列化失败时记录日志但不抛出（绝不拖垮 /api/intents）。 */
     public void save(IntentRequest req, RunResult result) {
         try {
             String json = mapper.writeValueAsString(result);
-            RunRecord rec = new RunRecord(
-                result.runId(), req.projectId(), req.intent(),
-                result.status(), result.phase(), result.message(),
-                json, Instant.now());
+            RunRecord rec = repo.findByRunId(result.runId())
+                .map(existing -> {  // 已存在：仅刷新随审批门变化的可变字段
+                    existing.update(result.status(), result.phase(), result.message(), json);
+                    return existing;
+                })
+                .orElseGet(() ->    // 新记录：构造器已设全字段
+                    new RunRecord(result.runId(), req.projectId(), req.intent(),
+                        result.status(), result.phase(), result.message(), json, Instant.now()));
             repo.save(rec);
         } catch (Exception e) {  // 序列化或写库异常都吞掉
             log.warn("RunStore.save failed for runId={}", result.runId(), e);
+        }
+    }
+
+    /** resume 后刷新已存在运行的状态/阶段/结果。无原始 IntentRequest，按 runId 定位现有记录。 */
+    public void update(RunResult result) {
+        try {
+            var existing = repo.findByRunId(result.runId());
+            if (existing.isEmpty()) {
+                // 运行时 checkpoint 存在但 DB 无记录（通常因初始 /api/intents 的 save 静默失败）。
+                // 此时运行时状态会与 DB 产生分歧，记录足够上下文供排查。
+                log.warn("RunStore.update: no record for runId={} (status={}, phase={}); "
+                        + "runtime/DB state diverged, skipping",
+                    result.runId(), result.status(), result.phase());
+                return;
+            }
+            RunRecord rec = existing.get();
+            rec.update(result.status(), result.phase(), result.message(),
+                mapper.writeValueAsString(result));
+            repo.save(rec);
+        } catch (Exception e) {
+            log.warn("RunStore.update failed for runId={}", result.runId(), e);
         }
     }
 
