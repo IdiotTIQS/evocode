@@ -40,7 +40,7 @@ public class RunStore {
     }
 
     public List<RunSummary> list(int limit) {
-        return repo.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit)).stream()
+        return repo.findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(0, limit)).stream()
             .map(r -> new RunSummary(r.getRunId(), r.getProjectId(), r.getIntent(),
                 r.getStatus(), r.getPhase(), r.getMessage(), r.getCreatedAt()))
             .toList();

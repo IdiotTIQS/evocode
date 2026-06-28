@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface RunRepository extends JpaRepository<RunRecord, Long> {
     Optional<RunRecord> findByRunId(String runId);
-    List<RunRecord> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    List<RunRecord> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 }
