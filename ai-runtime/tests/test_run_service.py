@@ -10,7 +10,7 @@ FIXTURE = str(REPO_ROOT / "test" / "fixtures" / "next-app")
 def test_execute_returns_completed_runresult():
     result = RunService().execute("add a comments api endpoint", "demo")
     assert result.status == "completed"
-    assert result.phase == "verified"
+    assert result.phase == "reviewed"
     assert len(result.task_graph.tasks) >= 1
     assert any(t.kind == "backend" for t in result.task_graph.tasks)
     assert result.run_id
