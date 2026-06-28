@@ -4,8 +4,10 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "project_record",
-    indexes = @Index(name = "idx_project_pid", columnList = "projectId", unique = true))
+@Table(name = "project_record", indexes = {
+    @Index(name = "idx_project_pid", columnList = "projectId", unique = true),
+    @Index(name = "idx_project_owner", columnList = "ownerId")
+})
 public class ProjectRecord {
 
     @Id
@@ -14,6 +16,8 @@ public class ProjectRecord {
 
     @Column(nullable = false, unique = true)
     private String projectId;
+
+    private String ownerId;  // 属主 userId；遗留数据可空（仅 ADMIN 可见）
 
     @Column(nullable = false)
     private String name;
@@ -25,8 +29,10 @@ public class ProjectRecord {
 
     protected ProjectRecord() {}  // JPA
 
-    public ProjectRecord(String projectId, String name, String repoPath, Instant createdAt) {
+    public ProjectRecord(String projectId, String ownerId, String name, String repoPath,
+                         Instant createdAt) {
         this.projectId = projectId;
+        this.ownerId = ownerId;
         this.name = name;
         this.repoPath = repoPath;
         this.createdAt = createdAt;
@@ -34,6 +40,7 @@ public class ProjectRecord {
 
     public Long getId() { return id; }
     public String getProjectId() { return projectId; }
+    public String getOwnerId() { return ownerId; }
     public String getName() { return name; }
     public String getRepoPath() { return repoPath; }
     public Instant getCreatedAt() { return createdAt; }

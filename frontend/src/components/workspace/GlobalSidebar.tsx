@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderGit2, Settings, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, FolderGit2, Settings, ArrowLeft, LogOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 type NavItem = {
   label: string;
@@ -23,6 +24,7 @@ const navLinkClass =
 
 export function GlobalSidebar({ className }: { className?: string }) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   return (
     <aside
@@ -59,7 +61,26 @@ export function GlobalSidebar({ className }: { className?: string }) {
         })}
       </nav>
 
-      <div className="md:mt-auto">
+      <div className="flex flex-col gap-2 md:mt-auto">
+        {user ? (
+          <div className="flex items-center justify-between gap-2 rounded-md px-3 py-2 text-xs">
+            <div className="min-w-0">
+              <p className="truncate font-medium text-foreground" title={user.email}>
+                {user.email}
+              </p>
+              <p className="text-muted-foreground">{user.role}</p>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="登出"
+              title="登出"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </div>
+        ) : null}
         <Link href="/" className={navLinkClass}>
           <ArrowLeft className="size-4" />
           返回首页

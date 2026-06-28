@@ -1,6 +1,7 @@
 // api/RunStreamController.java
 package com.evocode.controlplane.api;
 
+import com.evocode.controlplane.auth.AuthPrincipal;
 import com.evocode.controlplane.client.PythonRuntimeClient;
 import com.evocode.controlplane.dto.IntentRequest;
 import com.evocode.controlplane.dto.RunResult;
@@ -10,7 +11,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -45,11 +49,13 @@ public class RunStreamController {
     }
 
     @PostMapping("/stream")
-    public SseEmitter stream(@Valid @RequestBody IntentRequest request) {
+    public SseEmitter stream(@Valid @RequestBody IntentRequest request,
+                             @AuthenticationPrincipal AuthPrincipal me) {
         SseEmitter emitter = newEmitter();
+        String ownerId = me.userId();
         EXEC.execute(() -> {
             try {
-                runtimeClient.streamRun(request, frame -> forward(emitter, frame, request));
+                runtimeClient.streamRun(request, frame -> forward(emitter, frame, request, ownerId));
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("stream run failed for project {}", request.projectId(), e);
@@ -60,11 +66,20 @@ public class RunStreamController {
     }
 
     @PostMapping("/{runId}/approve/stream")
-    public SseEmitter approveStream(@PathVariable String runId) {
+    public SseEmitter approveStream(@PathVariable String runId,
+                                    @AuthenticationPrincipal AuthPrincipal me) {
         SseEmitter emitter = newEmitter();
+        // 所有权校验：非属主/非 ADMIN 直接以 404 收尾，不触达运行时（与 RunController.canAccess 同规则）。
+        boolean allowed = me.isAdmin()
+            ? store.get(runId).isPresent()
+            : store.ownerOf(runId).filter(me.userId()::equals).isPresent();
+        if (!allowed) {
+            emitter.completeWithError(new ResponseStatusException(HttpStatus.NOT_FOUND));
+            return emitter;
+        }
         EXEC.execute(() -> {
             try {
-                runtimeClient.streamResume(runId, frame -> forward(emitter, frame, null));
+                runtimeClient.streamResume(runId, frame -> forward(emitter, frame, null, null));
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("stream approve failed for run {}", runId, e);
@@ -83,10 +98,10 @@ public class RunStreamController {
     }
 
     /** 转发一帧给浏览器；先持久化终帧再发送，确保浏览器中途断开也不致 DB 滞后。 */
-    private void forward(SseEmitter emitter, String frameJson, IntentRequest origin) {
+    private void forward(SseEmitter emitter, String frameJson, IntentRequest origin, String ownerId) {
         // 先持久化：终帧此刻已从上游完整收到，先落库与批量路径行为一致，
         // 即便浏览器在本帧断开（send 抛 IOException）DB 也已更新。
-        persistIfTerminal(frameJson, origin);
+        persistIfTerminal(frameJson, origin, ownerId);
         try {
             emitter.send(SseEmitter.event().data(frameJson));
         } catch (IOException e) {
@@ -96,7 +111,7 @@ public class RunStreamController {
     }
 
     /** 终帧（gate/done/failed）携带完整 RunResult：保存或更新到 RunStore。 */
-    private void persistIfTerminal(String frameJson, IntentRequest origin) {
+    private void persistIfTerminal(String frameJson, IntentRequest origin, String ownerId) {
         try {
             JsonNode node = mapper.readTree(frameJson);
             String type = node.path("type").asText();
@@ -104,9 +119,9 @@ public class RunStreamController {
             RunResult result = mapper.treeToValue(node.get("result"), RunResult.class);
             if ("gate".equals(type) || "done".equals(type) || "failed".equals(type)) {
                 if (origin != null) {
-                    store.save(origin, result);   // 首段（提交意图）：创建记录
+                    store.save(origin, result, ownerId);  // 首段（提交意图）：创建记录（记属主）
                 } else {
-                    store.update(result);          // 续跑段：刷新已存在记录
+                    store.update(result);                  // 续跑段：刷新已存在记录
                 }
             }
         } catch (Exception e) {

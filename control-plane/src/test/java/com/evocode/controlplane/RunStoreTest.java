@@ -30,19 +30,20 @@ class RunStoreTest {
     @Test
     void save_then_get_roundtrips_full_result() {
         var req = new IntentRequest("加联系页", "demo", null);
-        store.save(req, sampleResult("run-rt-1"));
+        store.save(req, sampleResult("run-rt-1"), "owner-1");
 
         Optional<RunResult> got = store.get("run-rt-1");
         assertTrue(got.isPresent());
         assertEquals("reviewed", got.get().phase());
         assertEquals("approve", got.get().review().verdict());
         assertEquals(1, got.get().taskGraph().tasks().size());
+        assertEquals("owner-1", store.ownerOf("run-rt-1").orElse(null));
     }
 
     @Test
     void list_returns_recent_first_with_summary_fields() {
-        store.save(new IntentRequest("意图A", "projA", null), sampleResult("run-list-a"));
-        store.save(new IntentRequest("意图B", "projB", null), sampleResult("run-list-b"));
+        store.save(new IntentRequest("意图A", "projA", null), sampleResult("run-list-a"), "owner-1");
+        store.save(new IntentRequest("意图B", "projB", null), sampleResult("run-list-b"), "owner-1");
 
         List<RunSummary> runs = store.list(10);
         assertTrue(runs.size() >= 2);
@@ -57,6 +58,16 @@ class RunStoreTest {
         assertEquals("projB", b.projectId());
         assertEquals("意图B", b.intent());
         assertEquals("completed", b.status());
+    }
+
+    @Test
+    void list_by_owner_only_returns_that_owners_runs() {
+        store.save(new IntentRequest("A 的", "p", null), sampleResult("run-owner-a"), "owner-a");
+        store.save(new IntentRequest("B 的", "p", null), sampleResult("run-owner-b"), "owner-b");
+
+        List<RunSummary> aRuns = store.listByOwner("owner-a", 10);
+        assertTrue(aRuns.stream().anyMatch(r -> r.runId().equals("run-owner-a")));
+        assertTrue(aRuns.stream().noneMatch(r -> r.runId().equals("run-owner-b")));
     }
 
     @Test

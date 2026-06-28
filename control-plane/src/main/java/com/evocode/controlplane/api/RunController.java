@@ -1,17 +1,24 @@
 // api/RunController.java
 package com.evocode.controlplane.api;
 
+import com.evocode.controlplane.auth.AuthPrincipal;
 import com.evocode.controlplane.client.PythonRuntimeClient;
 import com.evocode.controlplane.dto.RunResult;
 import com.evocode.controlplane.persistence.RunStore;
 import com.evocode.controlplane.persistence.RunSummary;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.List;
 
-// 注意：本端点当前无鉴权，仅供 localhost 使用。鉴权/RBAC 为后续增量。
+/**
+ * Run 查询与审批，按当前用户所有权隔离：
+ *   - list 仅本人运行（ADMIN 全部）
+ *   - get/approve 非属主一律 404（遗留无属主记录仅 ADMIN 可见）
+ * 鉴权由 SecurityConfig 保证。
+ */
 @RestController
 @RequestMapping("/api/runs")
 public class RunController {
@@ -24,13 +31,23 @@ public class RunController {
         this.runtimeClient = runtimeClient;
     }
 
+    /** 当前用户是否可访问该 run（属主匹配或 ADMIN）。 */
+    private boolean canAccess(String runId, AuthPrincipal me) {
+        if (me.isAdmin()) return store.get(runId).isPresent();
+        return store.ownerOf(runId).filter(me.userId()::equals).isPresent();
+    }
+
     @GetMapping
-    public List<RunSummary> list(@RequestParam(defaultValue = "20") int limit) {
-        return store.list(Math.min(Math.max(limit, 1), 100));
+    public List<RunSummary> list(@RequestParam(defaultValue = "20") int limit,
+                                 @AuthenticationPrincipal AuthPrincipal me) {
+        int capped = Math.min(Math.max(limit, 1), 100);
+        return me.isAdmin() ? store.list(capped) : store.listByOwner(me.userId(), capped);
     }
 
     @GetMapping("/{runId}")
-    public ResponseEntity<RunResult> get(@PathVariable String runId) {
+    public ResponseEntity<RunResult> get(@PathVariable String runId,
+                                         @AuthenticationPrincipal AuthPrincipal me) {
+        if (!canAccess(runId, me)) return ResponseEntity.notFound().build();
         return store.get(runId)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
@@ -38,14 +55,14 @@ public class RunController {
 
     /**
      * 批准当前审批门：让运行时从 checkpoint 越过该门到下一个门或完成，并刷新持久化记录。
-     * plan gate 批准 → 生成 changeSet（仍不落盘，停在 diff gate）；
-     * diff gate 批准 → 落盘并完成。
-     * 幂等：对【已完成】的 run 再次调用会返回 200 + 当前 completed 结果（运行时 resume
-     * 在无下一节点时幂等返回当前态），便于客户端在网络超时后安全重试。
+     * 仅属主/ADMIN 可批准（非属主 404）。
+     * 幂等：对已完成 run 再次调用返回 200 + 当前 completed 结果。
      * 运行时返回 404（无 checkpoint）时透传为 404。
      */
     @PostMapping("/{runId}/approve")
-    public ResponseEntity<RunResult> approve(@PathVariable String runId) {
+    public ResponseEntity<RunResult> approve(@PathVariable String runId,
+                                             @AuthenticationPrincipal AuthPrincipal me) {
+        if (!canAccess(runId, me)) return ResponseEntity.notFound().build();
         try {
             RunResult result = runtimeClient.resumeRun(runId);
             store.update(result);

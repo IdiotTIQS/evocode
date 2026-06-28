@@ -6,7 +6,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "session_record", indexes = {
     @Index(name = "idx_session_sid", columnList = "sessionId", unique = true),
-    @Index(name = "idx_session_pid", columnList = "projectId")
+    @Index(name = "idx_session_pid", columnList = "projectId"),
+    @Index(name = "idx_session_owner", columnList = "ownerId")
 })
 public class SessionRecord {
 
@@ -20,6 +21,8 @@ public class SessionRecord {
     @Column(nullable = false)
     private String projectId;
 
+    private String ownerId;  // 属主 userId；遗留数据可空
+
     @Column(nullable = false)
     private String title;
 
@@ -31,10 +34,11 @@ public class SessionRecord {
 
     protected SessionRecord() {}  // JPA
 
-    public SessionRecord(String sessionId, String projectId, String title,
+    public SessionRecord(String sessionId, String projectId, String ownerId, String title,
                          Instant createdAt, Instant updatedAt) {
         this.sessionId = sessionId;
         this.projectId = projectId;
+        this.ownerId = ownerId;
         this.title = title;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -43,6 +47,7 @@ public class SessionRecord {
     public Long getId() { return id; }
     public String getSessionId() { return sessionId; }
     public String getProjectId() { return projectId; }
+    public String getOwnerId() { return ownerId; }
     public String getTitle() { return title; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

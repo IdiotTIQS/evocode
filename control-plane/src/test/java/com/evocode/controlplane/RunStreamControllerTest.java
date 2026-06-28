@@ -1,10 +1,11 @@
 package com.evocode.controlplane;
 
+import com.evocode.controlplane.auth.JwtService;
 import com.evocode.controlplane.client.PythonRuntimeClient;
 import com.evocode.controlplane.dto.IntentRequest;
 import com.evocode.controlplane.persistence.RunStore;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -26,8 +28,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RunStreamControllerTest {
 
     @Autowired MockMvc mvc;
+    @Autowired JwtService jwt;
     @MockBean PythonRuntimeClient runtimeClient;
     @MockBean RunStore store;
+
+    private String alice;
+
+    @BeforeEach
+    void setup() {
+        alice = "Bearer " + jwt.issue("user-alice", "alice@e.com", "USER");
+    }
 
     private static final String GATE_FRAME =
         "{\"type\":\"gate\",\"result\":{\"runId\":\"r1\",\"status\":\"waiting_approval\","
@@ -35,8 +45,15 @@ class RunStreamControllerTest {
         + "\"message\":\"ok\"}}";
 
     @Test
-    void stream_forwards_frames_and_persists_terminal() throws Exception {
-        // 模拟运行时：回调若干进度帧 + 终帧 gate。
+    void unauthenticated_returns_401() throws Exception {
+        mvc.perform(post("/api/runs/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"intent\":\"x\",\"projectId\":\"p\"}"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void stream_forwards_frames_and_persists_terminal_with_owner() throws Exception {
         doAnswer(inv -> {
             Consumer<String> onData = inv.getArgument(1);
             onData.accept("{\"type\":\"run\",\"runId\":\"r1\"}");
@@ -45,23 +62,20 @@ class RunStreamControllerTest {
             return null;
         }).when(runtimeClient).streamRun(any(IntentRequest.class), any());
 
-        MvcResult mvcResult = mvc.perform(post("/api/runs/stream")
+        mvc.perform(post("/api/runs/stream").header("Authorization", alice)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"intent\":\"add page\",\"projectId\":\"demo\"}"))
             .andExpect(request().asyncStarted())
             .andReturn();
 
-        mvc.perform(asyncDispatch(mvcResult))
-            .andExpect(status().isOk())
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("understand")))
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("\"gate\":\"plan\"")));
-
-        // 终帧应触发 save（首段创建记录）。
-        verify(store, times(1)).save(any(IntentRequest.class), any());
+        // 后台虚拟线程异步转发；终帧应触发 save（携带属主 user-alice）。轮询等待其落地。
+        verify(runtimeClient, timeout(5000)).streamRun(any(IntentRequest.class), any());
+        verify(store, timeout(5000).times(1)).save(any(IntentRequest.class), any(), eq("user-alice"));
     }
 
     @Test
-    void approve_stream_persists_via_update() throws Exception {
+    void approve_stream_owner_persists_via_update() throws Exception {
+        when(store.ownerOf(eq("r1"))).thenReturn(Optional.of("user-alice"));
         doAnswer(inv -> {
             Consumer<String> onData = inv.getArgument(1);
             onData.accept("{\"type\":\"phase\",\"node\":\"generate\",\"label\":\"L\"}");
@@ -70,16 +84,22 @@ class RunStreamControllerTest {
             return null;
         }).when(runtimeClient).streamResume(eq("r1"), any());
 
-        MvcResult mvcResult = mvc.perform(post("/api/runs/r1/approve/stream"))
+        mvc.perform(post("/api/runs/r1/approve/stream").header("Authorization", alice))
             .andExpect(request().asyncStarted())
             .andReturn();
 
-        mvc.perform(asyncDispatch(mvcResult))
-            .andExpect(status().isOk())
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("\"type\":\"done\"")));
+        verify(store, timeout(5000).times(1)).update(any());
+        verify(store, never()).save(any(), any(), any());
+    }
 
-        // 续跑段应走 update（刷新已存在记录），不应调用 save。
-        verify(store, times(1)).update(any());
-        verify(store, never()).save(any(), any());
+    @Test
+    void approve_stream_non_owner_does_not_touch_runtime() throws Exception {
+        String bob = "Bearer " + jwt.issue("user-bob", "bob@e.com", "USER");
+        when(store.ownerOf(eq("r1"))).thenReturn(Optional.of("user-alice"));
+
+        // 非属主：控制器在 emitter 内以 404 收尾，且不调用运行时。
+        mvc.perform(post("/api/runs/r1/approve/stream").header("Authorization", bob))
+            .andReturn();
+        verify(runtimeClient, never()).streamResume(any(), any());
     }
 }

@@ -2,7 +2,7 @@
 // Project 数据源适配器。已对接控制平面真实端点（跨设备持久化）。
 // 所有函数为 async：调用方需 await。错误沿用 api.ts 的 ControlPlaneError。
 import type { Project } from "@/types/domain";
-import { ControlPlaneError } from "@/lib/api";
+import { ControlPlaneError, authFetch } from "@/lib/api";
 
 const BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8080";
 
@@ -24,7 +24,7 @@ function fromDto(d: ProjectDto): Project {
 }
 
 export async function listProjects(): Promise<Project[]> {
-  const resp = await fetch(`${BASE}/api/projects`);
+  const resp = await authFetch(`${BASE}/api/projects`);
   if (!resp.ok) throw new ControlPlaneError(resp.status);
   const data: ProjectDto[] = await resp.json();
   return data.map(fromDto);
@@ -32,7 +32,7 @@ export async function listProjects(): Promise<Project[]> {
 
 /** 未找到返回 null（404）；其余非 2xx 抛 ControlPlaneError。 */
 export async function getProject(id: string): Promise<Project | null> {
-  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`);
+  const resp = await authFetch(`${BASE}/api/projects/${encodeURIComponent(id)}`);
   if (resp.status === 404) return null;
   if (!resp.ok) throw new ControlPlaneError(resp.status);
   return fromDto(await resp.json());
@@ -42,7 +42,7 @@ export async function createProject(
   name: string,
   repoPath?: string
 ): Promise<Project> {
-  const resp = await fetch(`${BASE}/api/projects`, {
+  const resp = await authFetch(`${BASE}/api/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, ...(repoPath !== undefined ? { repoPath } : {}) }),
@@ -59,7 +59,7 @@ export async function updateProject(
   id: string,
   patch: { name?: string; repoPath?: string }
 ): Promise<Project | null> {
-  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
+  const resp = await authFetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -70,7 +70,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const resp = await fetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
+  const resp = await authFetch(`${BASE}/api/projects/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   // 404 视为已删除（幂等）。

@@ -1,11 +1,13 @@
 // api/IntentController.java
 package com.evocode.controlplane.api;
 
+import com.evocode.controlplane.auth.AuthPrincipal;
 import com.evocode.controlplane.client.PythonRuntimeClient;
 import com.evocode.controlplane.dto.IntentRequest;
 import com.evocode.controlplane.dto.RunResult;
 import com.evocode.controlplane.persistence.RunStore;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,9 +23,10 @@ public class IntentController {
     }
 
     @PostMapping
-    public RunResult submit(@Valid @RequestBody IntentRequest request) {
+    public RunResult submit(@Valid @RequestBody IntentRequest request,
+                            @AuthenticationPrincipal AuthPrincipal me) {
         RunResult result = runtimeClient.createRun(request);
-        runStore.save(request, result);  // 旁路持久化；save 内部已吞异常
+        runStore.save(request, result, me.userId());  // 旁路持久化（记属主）；save 内部已吞异常
         return result;
     }
 }

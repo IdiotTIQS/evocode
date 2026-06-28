@@ -25,8 +25,8 @@ public class RunStore {
         this.mapper = mapper;
     }
 
-    /** 持久化一次运行（按 runId upsert）。序列化失败时记录日志但不抛出（绝不拖垮 /api/intents）。 */
-    public void save(IntentRequest req, RunResult result) {
+    /** 持久化一次运行（按 runId upsert），记录属主。序列化失败时记录日志但不抛出。 */
+    public void save(IntentRequest req, RunResult result, String ownerId) {
         try {
             String json = mapper.writeValueAsString(result);
             RunRecord rec = repo.findByRunId(result.runId())
@@ -35,7 +35,7 @@ public class RunStore {
                     return existing;
                 })
                 .orElseGet(() ->    // 新记录：构造器已设全字段
-                    new RunRecord(result.runId(), req.projectId(), req.intent(),
+                    new RunRecord(result.runId(), req.projectId(), ownerId, req.intent(),
                         result.status(), result.phase(), result.message(), json, Instant.now()));
             repo.save(rec);
         } catch (Exception e) {  // 序列化或写库异常都吞掉
@@ -66,9 +66,18 @@ public class RunStore {
 
     public List<RunSummary> list(int limit) {
         return repo.findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(0, limit)).stream()
-            .map(r -> new RunSummary(r.getRunId(), r.getProjectId(), r.getIntent(),
-                r.getStatus(), r.getPhase(), r.getMessage(), r.getCreatedAt()))
-            .toList();
+            .map(RunStore::toSummary).toList();
+    }
+
+    /** 按属主列出运行（非 ADMIN 用）。 */
+    public List<RunSummary> listByOwner(String ownerId, int limit) {
+        return repo.findByOwnerIdOrderByCreatedAtDescIdDesc(ownerId, PageRequest.of(0, limit)).stream()
+            .map(RunStore::toSummary).toList();
+    }
+
+    private static RunSummary toSummary(RunRecord r) {
+        return new RunSummary(r.getRunId(), r.getProjectId(), r.getIntent(),
+            r.getStatus(), r.getPhase(), r.getMessage(), r.getCreatedAt());
     }
 
     public Optional<RunResult> get(String runId) {
@@ -80,5 +89,10 @@ public class RunStore {
                 return Optional.empty();
             }
         });
+    }
+
+    /** 取运行的属主 id（用于访问控制）；无记录或遗留无属主时为空。 */
+    public Optional<String> ownerOf(String runId) {
+        return repo.findByRunId(runId).map(RunRecord::getOwnerId);
     }
 }
