@@ -18,3 +18,5 @@ ai-runtime/data/
 # OS
 .DS_Store
 .demo-app/
+# H2
+control-plane/data/
