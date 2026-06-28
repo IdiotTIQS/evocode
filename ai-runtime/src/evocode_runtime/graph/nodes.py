@@ -2,6 +2,7 @@ import logging
 import os
 from evocode_runtime.graph.state import RunState
 from evocode_runtime.llm import get_llm_gateway
+from evocode_runtime.agents import analyze_tasks
 from evocode_runtime.pkg import TsExtractor, ProjectGraph, ExtractionError
 from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
 from evocode_runtime.pkg import TsVerifier, VerificationError
@@ -80,6 +81,19 @@ def plan_node(state: RunState) -> dict:
     gateway = get_llm_gateway()
     tasks = gateway.plan(state["intent"], state.get("context") or {})
     return {"tasks": [t.model_dump() for t in tasks], "phase": "planned"}
+
+
+def architect_node(state: RunState) -> dict:
+    """架构师阶段：为每个任务产出架构笔记，供 generate 落地时遵循。
+
+    确定性、读知识图谱。任何异常 → 返回空笔记，绝不让 /runs 失败。"""
+    tasks = state.get("tasks") or []
+    try:
+        notes = analyze_tasks(tasks, state.get("context") or {})
+    except Exception:  # noqa: BLE001
+        logger.exception("architect_node failed for project %s", state.get("projectId"))
+        notes = []
+    return {"architectureNotes": notes, "phase": "architected"}
 
 
 def generate_node(state: RunState) -> dict:
