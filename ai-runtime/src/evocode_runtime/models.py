@@ -67,6 +67,20 @@ class VerificationResult(BaseModel):
     diagnostics: list[Diagnostic] = Field(default_factory=list)
 
 
+class ReviewFinding(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    severity: Literal["critical", "major", "minor", "suggestion"]
+    file_path: str = Field(alias="filePath")
+    message: str
+    suggested_fix: str | None = Field(default=None, alias="suggestedFix")
+
+
+class ReviewOutput(BaseModel):
+    verdict: Literal["approve", "request_changes", "block"]
+    findings: list[ReviewFinding] = Field(default_factory=list)
+    summary: str
+
+
 class RunResult(BaseModel):
     run_id: str = Field(alias="runId")
     status: Literal["completed", "failed"]

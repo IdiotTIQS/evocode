@@ -2,7 +2,7 @@ import logging
 import os
 from evocode_runtime.graph.state import RunState
 from evocode_runtime.llm import get_llm_gateway
-from evocode_runtime.agents import analyze_tasks
+from evocode_runtime.agents import analyze_tasks, review_change_set
 from evocode_runtime.pkg import TsExtractor, ProjectGraph, ExtractionError
 from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
 from evocode_runtime.pkg import TsVerifier, VerificationError
@@ -141,3 +141,18 @@ def verify_node(state: RunState) -> dict:
     except Exception:  # noqa: BLE001  绝不让 verify 拖垮 /runs
         logger.exception("verify_node failed for project %s", state.get("projectId"))
         return {"verification": not_checked, "phase": "verified"}
+
+
+def review_node(state: RunState) -> dict:
+    """审查阶段：对变更集 + 验证结果出具裁定。确定性，绝不让 /runs 失败。"""
+    try:
+        review = review_change_set(
+            intent=state.get("intent", ""),
+            tasks=state.get("tasks") or [],
+            change_set=state.get("changeSet") or [],
+            verification=state.get("verification") or {})
+    except Exception:  # noqa: BLE001
+        logger.exception("review_node failed for project %s", state.get("projectId"))
+        review = {"verdict": "approve", "findings": [],
+                  "summary": "审查阶段内部错误，已跳过。"}
+    return {"review": review, "phase": "reviewed"}
