@@ -17,12 +17,14 @@ public class RunRecord {
     private String projectId;
 
     @Lob
+    @Column(columnDefinition = "CLOB")
     private String intent;
 
     private String status;
     private String phase;
 
     @Lob
+    @Column(columnDefinition = "CLOB")
     private String message;
 
     @Lob
