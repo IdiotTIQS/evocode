@@ -86,6 +86,28 @@ curl http://localhost:8080/actuator/health   # → {"status":"UP"}
 curl http://localhost:8000/health            # → {"status":"ok"}
 ```
 
+#### Run history (persisted)
+
+The control plane persists every run to an embedded H2 file database
+(`control-plane/data/`), so history survives restarts. Two read endpoints expose it:
+
+```bash
+# 最近运行列表（最近优先，可选 ?limit=N，默认 20、上限 100）
+curl http://localhost:8080/api/runs
+# → [{"runId":"<uuid>","projectId":"demo","intent":"...","status":"completed",
+#     "phase":"reviewed","message":"...","createdAt":"2026-..Z"}, ...]
+
+# 单次运行的完整 RunResult
+curl http://localhost:8080/api/runs/<runId>
+# → {"runId":"<uuid>","status":"completed","phase":"reviewed","taskGraph":{...},
+#    "changeSet":[...],"review":{...}, ...}
+```
+
+Persistence is a side effect of `POST /api/intents` — if the write fails the
+intent response is unaffected. These endpoints currently have **no
+authentication and are intended for localhost-only use** (auth is a later increment).
+
+
 #### With a real project knowledge graph (optional `repoPath`)
 
 Pass `repoPath` pointing at a React/Next.js repo. The `understand` step runs the

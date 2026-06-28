@@ -1,11 +1,11 @@
 # Control Plane Architecture
 
-> **实现状态（截至 increment 6） / Implementation Status (as of increment 6)**
-> 本文档描述的是**目标架构**。当前 Control Plane 是一个轻量转发层：**无鉴权、仅 localhost**。
-> - ✅ 已构建：`POST /api/intents` 转发到 AI Runtime `POST /runs`（IntentController + PythonRuntimeClient）；CORS 配置（WebCorsConfig）；四层 DTO 契约镜像（含 ReviewOutput/ReviewFinding）；`/actuator/health`。
-> - 📋 计划中（pom.xml 无对应依赖、代码无对应包）：Spring Security / JWT 鉴权授权（无 `security/` 包）；Spring Data JPA / PostgreSQL（无 `domain/`、`service/`）；Spring WebFlux / SSE 流式；Redis 会话与运行队列；多租户边界；Run/Task 状态持久化；项目与运行管理端点（`/api/projects`、`/api/runs/*` 等）。
+> **实现状态（截至 increment 7） / Implementation Status (as of increment 7)**
+> 本文档描述的是**目标架构**。当前 Control Plane 是一个轻量转发层 + 运行持久化：**无鉴权、仅 localhost**。
+> - ✅ 已构建：`POST /api/intents` 转发到 AI Runtime `POST /runs`（IntentController + PythonRuntimeClient）；CORS 配置（WebCorsConfig）；四层 DTO 契约镜像（含 ReviewOutput/ReviewFinding）；`/actuator/health`；**Run 持久化（Spring Data JPA + H2 文件库，混合存储：标量列 + RunResult JSON）与历史查询端点 `GET /api/runs`、`GET /api/runs/{runId}`**。
+> - 📋 计划中（pom.xml 无对应依赖、代码无对应包）：Spring Security / JWT 鉴权授权（无 `security/` 包）；PostgreSQL（当前用 H2，无 `domain/` 完整领域模型）；Spring WebFlux / SSE 流式；Redis 会话与运行队列；多租户边界；Task 级状态跟踪；项目管理端点（`/api/projects` 等）。
 >
-> 下文中的领域模型、完整 API 表、编排流程描述的是目标设计，目前仅 `POST /api/intents` 与健康检查端点真实存在。
+> 下文中的领域模型、完整 API 表、编排流程描述的是目标设计；目前真实存在的是 `POST /api/intents`、`GET /api/runs`、`GET /api/runs/{runId}` 与健康检查端点。
 
 ## Overview
 
