@@ -31,3 +31,13 @@
 收尾修复 commit 2ccf674：移动端导航可达（移除死菜单按钮，侧栏<md 变横向条）、PipelineStepper done prop（终态全亮）、新增 --success 语义 token 替换硬编码 #24B291。
 浏览器 QA：桌面+移动(390px) 均单一 main、5 导航项可达、3 输入在、空态渲染、success token 解析。tsc+build 通过。
 可延后 Minor：导航占位项用 <a>(href=#)、连接线不随进度变色、findings/diag index key、dark: 死样式（无主题切换）。
+
+## Control Plane Run 持久化（plan: docs/superpowers/plans/2026-06-28-control-plane-persistence.md）
+基线 BASE=d75f0c9
+注意：control-plane 跑 mvn test 需联网（离线缺 jaxb 等测试期传递依赖）；mvn -q test 不加 -o。
+- Task 1: JPA+H2 依赖与数据源配置 — complete (commit ff6254b, 规范✅质量approved；contextLoads 在新数据源下通过, HikariPool 连上 H2 文件库, data/ 已 gitignore). Minor: url 含分号可加引号、相对路径对 cwd 敏感(从 control-plane/ 启动即对齐)。
+- Task 2: RunRecord 实体 + RunStore 持久化 — complete (commits c7a4322..176f637, 规范✅质量approved；混合持久化标量列+RunResult JSON, save 吞异常, CLOB. Fix wave1: id 次级排序键消竞态 + 测试内存库隔离, 4 测试通过)。
+- Task 3: submit 接入持久化 + /api/runs 端点 — complete (commit c601617, 规范✅质量approved；7/7 测试过, @MockitoBean→@MockBean 回退, limit clamp, 404, save 旁路不影响 submit). Minor: 残留脚手架文件名注释、通配 import(风格)。
+- Task 4: 前端契约镜像 + API 封装 — complete (commit 41452a4, 规范✅质量approved 零发现；RunSummary 7 字段镜像 Java, listRuns/getRun 复用 BASE+ControlPlaneError+encodeURIComponent)。
+- Task 5: 控制台历史区 + 详情载入 — complete (commit e7c8c6e, 规范✅质量approved；useEffect active 防竞态, 三态, 稳定 runId key, truncate, 失败兜底不崩). Minor: status Badge 对运行中状态会显红(后端仅 completed/failed 暂无影响)、列表项省略 projectId/时间、未用 ScrollArea。
+- Task 6: 端到端验证 + 文档 — complete (commit 含文档更新；端到端实测闭环跑通: POST 意图→reviewed→GET /api/runs 最近优先→GET /api/runs/{id} 完整 RunResult; 清理了测试污染的文件库; 7/7 Java 测试过; 前端 build 过)。
