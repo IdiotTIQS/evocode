@@ -5,6 +5,7 @@
 对应文档 docs/agents/architect-agent.md。
 """
 import os
+import re
 
 from evocode_runtime.models import ArchitectureNotes
 from evocode_runtime.pkg import ProjectGraph
@@ -29,11 +30,10 @@ def _observed_component_dir(graph: ProjectGraph) -> str | None:
                 counts[d] = counts.get(d, 0) + 1
     if not counts:
         return None
-    return max(counts, key=counts.get)
+    return max(counts, key=lambda d: (counts[d], d))
 
 
 def _slug(text: str) -> str:
-    import re
     words = re.findall(r"[A-Za-z0-9]+", text or "")
     return "".join(w.capitalize() for w in words[:3]) or "Feature"
 

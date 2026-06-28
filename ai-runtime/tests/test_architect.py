@@ -16,8 +16,9 @@ _CTX = {
             {"type": "DEFINES", "from": "f2", "to": "c2"},
             {"type": "IMPORTS", "from": "f2", "to": "f1"},
         ],
-        "stats": {"fileCount": 2, "componentCount": 2, "importCount": 1, "maxImpactCount": 1},
     },
+    # stats 是 context 的顶层键，与 to_context() 实际产出的结构保持一致
+    "stats": {"fileCount": 2, "componentCount": 2, "importCount": 1, "maxImpactCount": 1},
 }
 
 
@@ -39,6 +40,8 @@ def test_analyze_emits_impact_warning_when_extending_existing_file():
     notes = analyze_tasks(tasks, _CTX)
     # 有影响面统计时，constraints 一定非空（必须遵循现有约定）
     assert notes[0]["constraints"]
+    # maxImpactCount=1 时 impactWarning 必须是非空字符串
+    assert notes[0]["impactWarning"]
 
 
 def test_architect_node_never_fails_on_empty_context():
