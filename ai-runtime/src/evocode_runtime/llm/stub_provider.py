@@ -37,3 +37,7 @@ class StubLlmProvider(LlmGateway):
             id=f"task-{n}", title="编写测试", kind="test",
             description="为上述变更编写单元/集成测试"))
         return tasks
+
+    def generate_code(self, task: dict, intent: str, note: dict | None) -> str | None:
+        """stub 不做 LLM 生成——返回 None，由 codegen 回退到确定性模板。"""
+        return None

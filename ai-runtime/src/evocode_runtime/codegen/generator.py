@@ -102,7 +102,10 @@ def _patterns_comment(note: dict | None) -> str:
 
 
 def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -> list[dict]:
-    """为单个任务生成文件。架构笔记存在时，优先使用其 fileLocations 与模式注释。"""
+    """为单个任务生成文件。架构笔记存在时，优先使用其 fileLocations 与模式注释。
+
+    内容优先用 LLM（gateway.generate_code）真实生成；provider 不支持或失败时回退
+    到确定性模板，保证 generate 阶段绝不失败。文件落点（path）始终由模板/架构笔记决定。"""
     kind = task.get("kind")
     if kind == "frontend":
         p, c = _frontend_file(task, intent)
@@ -121,10 +124,23 @@ def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -
         # 安全：规范化反斜杠后，要求落在 evocode_generated/ 下且无 .. 段（兼容 Windows 路径）
         if primary_norm.startswith("evocode_generated/") and ".." not in primary_norm.split("/"):
             p = primary_norm
+    # 内容：优先 LLM 真实生成，失败回退上面的模板 c。
+    llm_code = _try_llm_code(task, intent, note)
+    if llm_code:
+        return [{"path": p, "content": llm_code}]
     comment = _patterns_comment(note)
     if comment:
         c = comment + c
     return [{"path": p, "content": c}]
+
+
+def _try_llm_code(task: dict, intent: str, note: dict | None) -> str | None:
+    """尝试用 LLM 网关生成代码；任何情况（stub / 失败 / 导入问题）都安全返回 None。"""
+    try:
+        from evocode_runtime.llm import get_llm_gateway
+        return get_llm_gateway().generate_code(task, intent, note)
+    except Exception:  # noqa: BLE001  绝不让 codegen 因 LLM 而失败
+        return None
 
 
 def generate_change_set(tasks: list[dict], intent: str,

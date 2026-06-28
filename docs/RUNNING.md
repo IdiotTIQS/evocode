@@ -112,8 +112,11 @@ two approval gates (plan → diff) to generate and apply code.
 | `EVOCODE_JWT_SECRET` | Control Plane | *(none — required)* | ≥32-byte signing key. Control plane **refuses to start** without it. Scripts auto-generate into `.evocode.env`. |
 | `evocode.jwt.ttl-hours` | Control Plane | `24` | Token lifetime. |
 | `python.runtime.base-url` | Control Plane | `http://localhost:8000` | Where the runtime lives. |
-| `OPENAI_API_KEY` | AI Runtime | *(unset)* | If set, the planner uses a real OpenAI call instead of the deterministic stub. Optional: `OPENAI_BASE_URL`, `OPENAI_MODEL`. |
+| `OPENAI_API_KEY` | AI Runtime | *(unset)* | If set, both **plan and code generation** use a real LLM instead of the deterministic stub + templates. DeepSeek (OpenAI-compatible) example: `OPENAI_BASE_URL=https://api.deepseek.com/v1`, `OPENAI_MODEL=deepseek-v4-pro`. Leave unset to run fully offline. |
+| `OPENAI_BASE_URL` | AI Runtime | `https://api.openai.com/v1` | OpenAI-compatible endpoint (set to DeepSeek's for DeepSeek). |
+| `OPENAI_MODEL` | AI Runtime | `gpt-4o-mini` | Model name. `deepseek-v4-pro` is a reasoning model; the runtime allots generous token budget so `content` isn't starved by reasoning tokens. |
 | `EVOCODE_PKG_DB` | AI Runtime | `data/pkg.db` | SQLite path for the knowledge-graph cache. |
+| `EVOCODE_CHECKPOINT_DB` | AI Runtime | `data/checkpoints.db` | SQLite path for approval-gate checkpoints (`:memory:` = ephemeral). |
 | `NEXT_PUBLIC_CONTROL_PLANE_URL` | Frontend | `http://localhost:8080` | Control-plane base URL the browser calls. |
 
 `.evocode.env` (git-ignored) holds the generated `EVOCODE_JWT_SECRET`. Delete it to rotate

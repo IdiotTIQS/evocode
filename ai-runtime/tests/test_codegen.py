@@ -1,4 +1,5 @@
 from evocode_runtime.codegen import generate_change_set, apply_change_set
+import evocode_runtime.codegen.generator as generator
 import os
 import tempfile
 import shutil
@@ -20,6 +21,26 @@ def test_backend_task_generates_java():
     files = generate_change_set(tasks, "add comments api")
     assert files[0]["path"].endswith(".java")
     assert "@RestController" in files[0]["content"]
+
+
+def test_uses_llm_content_when_gateway_provides(monkeypatch):
+    """gateway.generate_code 返回真实代码时，codegen 用 LLM 产物（而非模板），路径仍由模板决定。"""
+    real_code = "// real LLM output\nexport function Contact() { return <form/>; }\n"
+    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note: real_code)
+    tasks = [{"id": "task-1", "title": "Contact", "kind": "frontend", "description": "form"}]
+    files = generate_change_set(tasks, "add contact")
+    assert files[0]["content"] == real_code           # 用了 LLM 产物
+    assert files[0]["path"].endswith(".tsx")           # 路径仍是模板逻辑
+    assert "// TODO: implement" not in files[0]["content"]
+
+
+def test_falls_back_to_template_when_llm_returns_none(monkeypatch):
+    """gateway 返回 None（stub/失败）时，回退确定性模板，保证不失败。"""
+    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note: None)
+    tasks = [{"id": "task-1", "title": "Contact", "kind": "frontend", "description": "form"}]
+    files = generate_change_set(tasks, "add contact")
+    assert "export default" in files[0]["content"]     # 模板特征
+    assert files[0]["path"].endswith(".tsx")
 
 
 def test_apply_writes_only_under_generated_dir():

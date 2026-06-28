@@ -231,11 +231,13 @@ The **Architect** node is deterministic and graph-driven: it reads the `ProjectG
 
 The **Review** node evaluates the generated `ChangeSet` and the `VerificationResult`, then emits a `ReviewOutput` with a `verdict` (`approve`, `request_changes`, or `block`), a plain-language `summary`, and a list of `ReviewFinding` items (severity, filePath, message, optional suggestedFix). The verdict is surfaced in the frontend console.
 
-The Planner uses a deterministic stub LLM by default (no credentials needed). Set
-`OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
-planning node to a real prompt-driven OpenAI call; prompts are loaded from
-`docs/prompts/`. A blank `intent` is rejected by the
-control plane with HTTP 400 (bean validation).
+By default EvoCode runs fully offline: a deterministic stub plans tasks and templates
+generate file skeletons (no credentials needed). Set `OPENAI_API_KEY` (+ optional
+`OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch **both the plan and the code-generation
+stages** to a real prompt-driven LLM (prompts in `docs/prompts/`); generation falls back
+to the template if the call fails, so `/runs` never breaks. DeepSeek is OpenAI-compatible
+(`OPENAI_BASE_URL=https://api.deepseek.com/v1`, `OPENAI_MODEL=deepseek-v4-pro`). A blank
+`intent` is rejected by the control plane with HTTP 400 (bean validation).
 
 ### Prerequisites
 
@@ -264,9 +266,9 @@ JWT** except `/api/auth/**` (register/login) and `/actuator/health`. Auth model:
   auth, durable checkpointer, secret rotation) before any non-local deployment. See
   [docs/RUNNING.md](docs/RUNNING.md) and `docs/architecture/deployment-architecture.md`.
 
-The Planner uses a deterministic stub LLM by default (no credentials needed). Set
-`OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
-planning node to a real prompt-driven OpenAI call.
+By default the stub plans and templates generate (no credentials). Set `OPENAI_API_KEY`
+(+ optional `OPENAI_BASE_URL` / `OPENAI_MODEL`, e.g. DeepSeek) to switch both plan and
+code generation to a real LLM, with template fallback on failure.
 
 ## Cross-Layer Contracts
 

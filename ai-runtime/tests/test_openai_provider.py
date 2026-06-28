@@ -61,3 +61,58 @@ def test_openai_plan_falls_back_on_bad_json(monkeypatch):
     provider = OpenAiLlmProvider()
     tasks = provider.plan("x", {})
     assert len(tasks) == 1 and tasks[0].kind == "generic"
+
+
+def test_generate_code_returns_llm_content(monkeypatch):
+    code = "export function Foo() { return null; }"
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        msgs = json["messages"]
+        assert msgs[0]["role"] == "system"
+        # 推理模型需要足够 token 额度
+        assert json["max_tokens"] >= 2000
+        return _FakeResponse(_chat_payload(code))
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    provider = OpenAiLlmProvider()
+    out = provider.generate_code(
+        {"id": "task-1", "title": "Foo", "kind": "frontend", "description": "做个 Foo"},
+        "add foo", None)
+    assert out is not None and "export function Foo" in out
+
+
+def test_generate_code_strips_markdown_fence(monkeypatch):
+    fenced = "```tsx\nexport const X = 1;\n```"
+
+    def fake_post(*a, **k):
+        return _FakeResponse(_chat_payload(fenced))
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    out = OpenAiLlmProvider().generate_code(
+        {"id": "t", "title": "X", "kind": "frontend", "description": "d"}, "i", None)
+    assert out.strip() == "export const X = 1;"
+    assert "```" not in out
+
+
+def test_generate_code_falls_back_to_none_on_error(monkeypatch):
+    def boom(*a, **k):
+        raise httpx.ConnectError("no network")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", boom)
+    out = OpenAiLlmProvider().generate_code(
+        {"id": "t", "title": "X", "kind": "frontend", "description": "d"}, "i", None)
+    assert out is None
+
+
+def test_generate_code_too_short_returns_none(monkeypatch):
+    def fake_post(*a, **k):
+        return _FakeResponse(_chat_payload("ok"))  # 太短
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    out = OpenAiLlmProvider().generate_code(
+        {"id": "t", "title": "X", "kind": "frontend", "description": "d"}, "i", None)
+    assert out is None

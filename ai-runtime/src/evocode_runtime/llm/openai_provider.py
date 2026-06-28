@@ -80,3 +80,84 @@ class OpenAiLlmProvider(LlmGateway):
         except Exception:  # noqa: BLE001  网络/解析/结构任何异常 → 回退
             logger.exception("OpenAiLlmProvider.plan failed, falling back")
             return self._fallback(intent)
+
+    # ── 代码生成 ──────────────────────────────────────────────────────────────
+    # task.kind → 对应角色提示词（docs/prompts）。
+    _KIND_PROMPT = {
+        "frontend": "frontend-prompt",
+        "backend": "backend-prompt",
+        "test": "test-prompt",
+    }
+
+    def _codegen_system_prompt(self, kind: str) -> str:
+        master = load_prompt("master-prompt")
+        role = load_prompt(self._KIND_PROMPT.get(kind, "")) if kind in self._KIND_PROMPT else ""
+        guidance = (
+            "你是 EvoCode 的代码生成智能体。根据给定任务与架构笔记，直接产出"
+            "【单个文件的完整可用代码】。只输出代码本身，不要任何解释、不要 Markdown "
+            "代码围栏（``` 之类），不要前后缀文字。代码必须是该任务的真实实现，"
+            "而非 TODO 占位。"
+        )
+        return "\n\n".join(p for p in (master, role, guidance) if p)
+
+    @staticmethod
+    def _strip_code_fence(text: str) -> str:
+        """去掉 LLM 可能加的 Markdown 代码围栏（```lang ... ```）。"""
+        s = text.strip()
+        if s.startswith("```"):
+            lines = s.split("\n")
+            # 去首行 ```lang
+            lines = lines[1:]
+            # 去末行 ```
+            if lines and lines[-1].strip().startswith("```"):
+                lines = lines[:-1]
+            s = "\n".join(lines)
+        return s.strip() + "\n"
+
+    def generate_code(self, task: dict, intent: str, note: dict | None) -> str | None:
+        """用 LLM 为单个任务生成完整文件内容；任何异常/空 → 返回 None 让调用方回退模板。"""
+        kind = task.get("kind", "generic")
+        notes_txt = ""
+        if note:
+            patterns = note.get("patternsToFollow") or []
+            constraints = note.get("constraints") or []
+            loc = (note.get("fileLocations") or {}).get("primary")
+            parts = []
+            if loc:
+                parts.append(f"目标文件：{loc}")
+            if patterns:
+                parts.append("应遵循的模式：" + "；".join(patterns))
+            if constraints:
+                parts.append("约束：" + "；".join(constraints))
+            notes_txt = "\n".join(parts)
+        user_msg = (
+            f"意图：{intent}\n"
+            f"任务：[{kind}] {task.get('title')} — {task.get('description', '')}\n"
+            f"{notes_txt}\n"
+            "请输出实现该任务的单个文件的完整代码。"
+        )
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": self._codegen_system_prompt(kind)},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    "temperature": 0,
+                    # 推理模型（如 deepseek-v4-pro）先耗 reasoning tokens 再出 content，
+                    # 留足额度，否则 content 可能为空。
+                    "max_tokens": 8000,
+                },
+                timeout=120.0,
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"].get("content") or ""
+            code = self._strip_code_fence(content)
+            # 太短视为无效产出 → 回退模板。
+            return code if len(code.strip()) >= 10 else None
+        except Exception:  # noqa: BLE001
+            logger.exception("OpenAiLlmProvider.generate_code failed, falling back to template")
+            return None

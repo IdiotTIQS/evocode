@@ -13,6 +13,13 @@ services:
     # 运行时端点仅供控制平面内网调用，不对宿主发布（如需调试可临时加 ports）。
     expose:
       - "8000"
+    environment:
+      # 设这三个即切真实 LLM（plan + generate）；留空则用确定性 stub + 模板。
+      # 从 .env 注入，绝不硬编码密钥。DeepSeek 为 OpenAI 兼容：
+      #   OPENAI_BASE_URL=https://api.deepseek.com/v1, OPENAI_MODEL=deepseek-v4-pro
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
     volumes:
       - ai-runtime-data:/app/data   # checkpoints.db + pkg.db 持久化
     healthcheck:
