@@ -7,9 +7,10 @@ import { toast } from "sonner";
 import { IntentForm } from "@/components/console/IntentForm";
 import { PipelineStepper } from "@/components/console/PipelineStepper";
 import { ResultTabs } from "@/components/console/ResultTabs";
+import { RunHistory } from "@/components/console/RunHistory";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { submitIntent, ControlPlaneError } from "@/lib/api";
+import { submitIntent, getRun, ControlPlaneError } from "@/lib/api";
 import type { RunResult } from "@/types/intent";
 
 export default function ConsolePage() {
@@ -18,6 +19,7 @@ export default function ConsolePage() {
   const [repoPath, setRepoPath] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   async function onSubmit() {
     setLoading(true);
@@ -28,6 +30,7 @@ export default function ConsolePage() {
         repoPath: repoPath || undefined,
       });
       setResult(r);
+      setRefreshKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ControlPlaneError) {
         toast.error(`控制平面返回错误（HTTP ${err.status}），请检查意图内容或服务端日志。`);
@@ -39,6 +42,14 @@ export default function ConsolePage() {
       console.error("submitIntent failed", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadRun(runId: string) {
+    try {
+      setResult(await getRun(runId));
+    } catch {
+      toast.error("无法载入该运行记录");
     }
   }
 
@@ -61,6 +72,8 @@ export default function ConsolePage() {
         onSubmit={onSubmit}
         loading={loading}
       />
+
+      <RunHistory onSelect={loadRun} refreshKey={refreshKey} />
 
       {loading ? (
         <div className="space-y-4">
