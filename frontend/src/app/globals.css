@@ -3,15 +3,15 @@
 /* ===== EvoCode 设计 token（设计语言借鉴火山引擎，内容为 EvoCode） ===== */
 @theme {
   /* 配色：白底、近黑文字、灰副文、蓝色强调、青色点缀、浅蓝区块底 */
-  --color-ink: rgb(12, 13, 14);
-  --color-ink-soft: rgb(29, 33, 41);
-  --color-muted: rgb(115, 122, 135);
-  --color-accent: rgb(0, 106, 255);
-  --color-accent-strong: rgb(0, 82, 204);
-  --color-teal: rgb(36, 178, 145);
-  --color-surface: rgb(255, 255, 255);
-  --color-surface-alt: rgb(244, 248, 252);
-  --color-border-soft: rgb(221, 226, 233);
+  --color-evo-ink: rgb(12, 13, 14);
+  --color-evo-ink-soft: rgb(29, 33, 41);
+  --color-evo-muted: rgb(115, 122, 135);
+  --color-evo-accent: rgb(0, 106, 255);
+  --color-evo-accent-strong: rgb(0, 82, 204);
+  --color-evo-teal: rgb(36, 178, 145);
+  --color-evo-surface: rgb(255, 255, 255);
+  --color-evo-surface-alt: rgb(244, 248, 252);
+  --color-evo-border-soft: rgb(221, 226, 233);
 
   --font-sans: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial,
@@ -25,8 +25,8 @@ html {
 }
 
 body {
-  background: var(--color-surface);
-  color: var(--color-ink);
+  background: var(--color-evo-surface);
+  color: var(--color-evo-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -60,4 +60,57 @@ body {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: saturate(180%) blur(12px);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+
+/* ===== shadcn/ui 主题变量（映射到 EvoCode 设计 token） ===== */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 11% 5%;            /* #0C0D0E 近黑 */
+    --card: 0 0% 100%;
+    --card-foreground: 220 11% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 11% 5%;
+    --primary: 215 100% 50%;             /* #006AFF 蓝强调 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 33% 97%;            /* #F4F8FC 浅蓝底 */
+    --secondary-foreground: 220 11% 5%;
+    --muted: 210 33% 97%;
+    --muted-foreground: 220 8% 49%;      /* #737A87 灰副文 */
+    --accent: 210 33% 97%;
+    --accent-foreground: 215 100% 50%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 22% 89%;               /* #DDE2E9 */
+    --input: 215 22% 89%;
+    --ring: 215 100% 50%;
+    --radius: 0.75rem;
+    --chart-1: 215 100% 50%;
+    --chart-2: 165 66% 42%;              /* #24B291 青 */
+  }
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }

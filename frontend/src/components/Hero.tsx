@@ -17,30 +17,30 @@ export function Hero() {
         }}
       />
       <div className="mx-auto max-w-4xl px-6 text-center">
-        <p className="fade-up mb-6 inline-block rounded-full border border-[var(--color-border-soft)] bg-white/60 px-4 py-1.5 text-sm text-[var(--color-muted)]">
+        <p className="fade-up mb-6 inline-block rounded-full border border-[var(--color-evo-border-soft)] bg-white/60 px-4 py-1.5 text-sm text-[var(--color-evo-muted)]">
           {landing.brand.tagline}
         </p>
-        <h1 className="display fade-up text-5xl text-[var(--color-ink)] sm:text-6xl md:text-7xl">
+        <h1 className="display fade-up text-5xl text-[var(--color-evo-ink)] sm:text-6xl md:text-7xl">
           {hero.title}
         </h1>
-        <p className="fade-up mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-muted)]">
+        <p className="fade-up mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-evo-muted)]">
           {hero.subtitle}
         </p>
         <div className="fade-up mt-10 flex flex-wrap items-center justify-center gap-4">
           <a
             href="/console"
-            className="rounded-full bg-[var(--color-accent)] px-7 py-3 font-medium text-white shadow-lg shadow-[var(--color-accent)]/20 transition hover:bg-[var(--color-accent-strong)]"
+            className="rounded-full bg-[var(--color-evo-accent)] px-7 py-3 font-medium text-white shadow-lg shadow-[var(--color-evo-accent)]/20 transition hover:bg-[var(--color-evo-accent-strong)]"
           >
             {hero.primaryCta}
           </a>
           <a
             href="#pipeline"
-            className="rounded-full border border-[var(--color-border-soft)] px-7 py-3 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            className="rounded-full border border-[var(--color-evo-border-soft)] px-7 py-3 font-medium text-[var(--color-evo-ink)] transition hover:border-[var(--color-evo-accent)] hover:text-[var(--color-evo-accent)]"
           >
             {hero.secondaryCta}
           </a>
         </div>
-        <p className="fade-up mt-12 font-mono text-sm tracking-tight text-[var(--color-ink-soft)]">
+        <p className="fade-up mt-12 font-mono text-sm tracking-tight text-[var(--color-evo-ink-soft)]">
           {hero.tagline}
         </p>
       </div>

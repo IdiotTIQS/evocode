@@ -5,7 +5,7 @@ export function CTA() {
   return (
     <section id="cta" className="py-24">
       <div className="mx-auto max-w-4xl px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-[var(--color-ink)] px-8 py-16 text-center sm:px-16">
+        <div className="relative overflow-hidden rounded-3xl bg-[var(--color-evo-ink)] px-8 py-16 text-center sm:px-16">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
@@ -24,7 +24,7 @@ export function CTA() {
                 href={cta.repoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full bg-white px-7 py-3 font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-accent)] hover:text-white"
+                className="rounded-full bg-white px-7 py-3 font-medium text-[var(--color-evo-ink)] transition hover:bg-[var(--color-evo-accent)] hover:text-white"
               >
                 {cta.button}
               </a>
