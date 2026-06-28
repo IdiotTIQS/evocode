@@ -62,7 +62,6 @@ export function SessionConversation({
   activeSessionId,
   className,
 }: {
-  sessionId: string;
   projectId: string;
   messages: SessionMessage[];
   activeSessionId: string;

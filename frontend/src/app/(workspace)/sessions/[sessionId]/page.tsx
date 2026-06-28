@@ -112,7 +112,6 @@ export default function SessionWorkspacePage() {
     <div className="flex gap-4">
       <SessionConversation
         className="hidden w-64 shrink-0 lg:flex lg:max-h-[calc(100vh-8rem)]"
-        sessionId={session.id}
         projectId={session.projectId}
         messages={messages}
         activeSessionId={session.id}
