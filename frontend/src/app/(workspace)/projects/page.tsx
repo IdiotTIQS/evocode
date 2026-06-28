@@ -70,6 +70,9 @@ export default function ProjectsPage() {
           <p className="text-sm text-muted-foreground">
             管理你的项目，进入项目查看会话、运行与设置。
           </p>
+          <p className="text-xs text-muted-foreground">
+            项目与会话当前保存在浏览器本地（不跨设备），后端落地后将迁移。
+          </p>
         </div>
         {!creating ? (
           <Button onClick={openForm}>

@@ -15,7 +15,7 @@ The EvoCode frontend is a Next.js application that serves as the **Agent Workspa
 
 The frontend is intentionally thin on backend logic — agent coordination and runtime knowledge live server-side. Run execution state comes from the Control Plane; Project/Session organization is currently persisted client-side in `localStorage` pending backend APIs.
 
-The legacy single-page `/console` has been retired and now redirects to `/dashboard` (Server Component `redirect`). Its reusable building blocks (`IntentForm`, `PipelineStepper`, `ResultTabs`, `ReviewPanel`) are kept and reused by the new workspace pages.
+The legacy single-page `/console` has been retired and now redirects to `/dashboard` (Server Component `redirect`). Its reusable building blocks (`PipelineStepper`, `ResultTabs`, `ReviewPanel`) are kept and reused by the new workspace pages.
 
 ---
 
@@ -113,8 +113,8 @@ src/
 │   ├── workspace/                     # GlobalSidebar, WorkspaceShell, StatCard, RecentList
 │   ├── session/                       # SessionConversation, SessionCenter,
 │   │                                  #   ProjectContextPanel, ApprovalGate
-│   ├── console/                       # 保留的复用件：IntentForm, PipelineStepper,
-│   │                                  #   ResultTabs, ReviewPanel, RunHistory
+│   ├── console/                       # 保留的复用件：PipelineStepper,
+│   │                                  #   ResultTabs, ReviewPanel
 │   │                                  #   （ConsoleShell/ConsoleSidebar 为旧单页遗留，已不接路由）
 │   ├── ui/                            # shadcn 基础件
 │   └── SiteNav / Hero / CTA / …       # 落地页区块（CTA 已指向 /dashboard）
