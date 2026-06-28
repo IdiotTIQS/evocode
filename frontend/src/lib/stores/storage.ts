@@ -19,3 +19,11 @@ export function setItem(key: string, value: unknown): void {
     /* 配额满或隐私模式：静默降级 */
   }
 }
+
+/** 生成客户端实体 id。仅限客户端调用——服务端语境显式抛错而非隐式崩。 */
+export function newId(): string {
+  if (typeof window === "undefined" || typeof crypto === "undefined" || !crypto.randomUUID) {
+    throw new Error("newId() 仅限客户端调用（Project/Session 创建发生在浏览器）");
+  }
+  return crypto.randomUUID();
+}

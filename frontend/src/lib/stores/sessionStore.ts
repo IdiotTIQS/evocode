@@ -2,7 +2,7 @@
 // Session / SessionMessage 本地数据源适配器（seam）。当前用 localStorage 持久化，
 // 接口与未来后端对齐。诚实隔离：这不是真实后端。
 import type { Session, SessionMessage } from "@/types/domain";
-import { getItem, setItem } from "./storage";
+import { getItem, setItem, newId } from "./storage";
 
 const SESSIONS_KEY = "evocode.sessions";
 const MESSAGES_KEY = "evocode.messages";
@@ -40,7 +40,7 @@ export function getSession(id: string): Session | null {
 export function createSession(projectId: string, title: string): Session {
   const now = new Date().toISOString();
   const session: Session = {
-    id: crypto.randomUUID(),
+    id: newId(),
     projectId,
     title,
     createdAt: now,
@@ -67,7 +67,7 @@ export function appendMessage(
   msg: Omit<SessionMessage, "id" | "sessionId" | "createdAt">
 ): void {
   const message: SessionMessage = {
-    id: crypto.randomUUID(),
+    id: newId(),
     sessionId,
     createdAt: new Date().toISOString(),
     ...msg,

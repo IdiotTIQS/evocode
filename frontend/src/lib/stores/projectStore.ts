@@ -2,7 +2,7 @@
 // Project 本地数据源适配器（seam）。当前用 localStorage 持久化，接口与未来后端对齐。
 // 诚实隔离：这不是真实后端，仅为页面集成提供过渡数据源。
 import type { Project } from "@/types/domain";
-import { getItem, setItem } from "./storage";
+import { getItem, setItem, newId } from "./storage";
 
 const PROJECTS_KEY = "evocode.projects";
 
@@ -27,7 +27,7 @@ export function getProject(id: string): Project | null {
 // TODO(backend): 后端 Project API 落地后替换为 fetch(`/api/projects`, { method: "POST" })。
 export function createProject(name: string, repoPath?: string): Project {
   const project: Project = {
-    id: crypto.randomUUID(),
+    id: newId(),
     name,
     ...(repoPath !== undefined ? { repoPath } : {}),
     createdAt: new Date().toISOString(),
