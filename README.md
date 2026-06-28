@@ -73,12 +73,14 @@ LangGraph `understand → plan → architect → generate → verify → review`
 curl -X POST http://localhost:8080/api/intents \
   -H "Content-Type: application/json" \
   -d '{"intent":"add a comments api and a product page","projectId":"shop"}'
-# → {"runId":"<uuid>","status":"completed","phase":"planned",
+# → {"runId":"<uuid>","status":"completed","phase":"reviewed",
 #    "taskGraph":{"tasks":[
 #      {"id":"task-1","title":"实现前端界面","kind":"frontend",...},
 #      {"id":"task-2","title":"实现后端 API","kind":"backend",...},
 #      {"id":"task-3","title":"编写测试","kind":"test",...}]},
-#    "message":"Planned 3 task(s) for project shop"}
+#    "changeSet":[{"path":"evocode_generated/...","content":"..."}],
+#    "review":{"verdict":"request_changes","findings":[...],"summary":"..."},
+#    "message":"Planned 3 task(s), generated 3 file(s) for project shop"}
 
 curl http://localhost:8080/actuator/health   # → {"status":"UP"}
 curl http://localhost:8000/health            # → {"status":"ok"}
@@ -96,10 +98,11 @@ what was extracted:
 curl -X POST http://localhost:8080/api/intents \
   -H "Content-Type: application/json" \
   -d '{"intent":"add a product page","projectId":"shop","repoPath":"E:/evocode/test/fixtures/next-app"}'
-# → {"runId":"<uuid>","status":"completed","phase":"planned",
+# → {"runId":"<uuid>","status":"completed","phase":"reviewed",
 #    "taskGraph":{"tasks":[{"kind":"frontend",...},{"kind":"test",...}]},
 #    "graphStats":{"fileCount":4,"componentCount":4,"importCount":2},
-#    "message":"Planned 2 task(s) for project shop"}
+#    "review":{"verdict":"approve","findings":[...],"summary":"..."},
+#    "message":"Planned 2 task(s), generated 2 file(s) for project shop"}
 ```
 
 Without `repoPath` (or if Node/the extractor is unavailable), `understand` falls
