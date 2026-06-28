@@ -1,11 +1,11 @@
 # Deployment Architecture
 
-> **实现状态（截至 increment：鉴权 + 持久化 checkpointer） / Implementation Status**
-> 本文档描述的是**目标部署架构**。当前真实运行模式是**本地、三个进程、localhost 取向**——已有 JWT 鉴权但尚未容器化。启动见 [docs/RUNNING.md](../RUNNING.md)。
-> - ✅ 已构建：本地以进程方式运行 Frontend（:3000）、Control Plane（:8080）、AI Runtime（:8000），一键脚本 `scripts/start.{ps1,sh}` 有序启动 + 健康检查 + 自动注入 `EVOCODE_JWT_SECRET`；Frontend → Control Plane → AI Runtime；**JWT 鉴权 + 所有权隔离已落地**；持久化用 H2 文件库（控制平面）+ SQLite（运行时 checkpoint/知识图谱）。
-> - 📋 计划中：容器化与 Dockerfile / Docker Compose、PostgreSQL（:5432）、Redis（:6379）、负载均衡 / HTTPS、私有网络与内部 DNS、水平扩缩与读副本、密钥轮换与运行时鉴权——目前均未落地。
+> **实现状态（截至 increment：容器化） / Implementation Status**
+> 本文档描述的是**目标部署架构**。当前真实运行模式有两种：本地三进程（`scripts/start.{ps1,sh}`），或 **Docker Compose 三容器**。启动见 [docs/RUNNING.md](../RUNNING.md)。
+> - ✅ 已构建：**容器化** —— 三服务各有 Dockerfile（ai-runtime: python:3.11-slim；control-plane: maven 多阶段→temurin-21-jre；frontend: node:22 多阶段→Next standalone）+ 根 `docker-compose.yml`（健康检查门控依赖 ai-runtime→control-plane→frontend、命名卷持久化、`.env` 注入 `EVOCODE_JWT_SECRET`、`PYTHON_RUNTIME_BASE_URL=http://ai-runtime:8000`）。也支持本地三进程（一键脚本，自动注入密钥）。**JWT 鉴权 + 所有权隔离**；持久化用 H2 文件库（控制平面）+ SQLite（运行时 checkpoint/知识图谱），Compose 下落命名卷。
+> - 📋 计划中：编排平台（Kubernetes）、PostgreSQL（:5432）替 H2、Redis（:6379）、负载均衡 / HTTPS、私有网络与内部 DNS、水平扩缩与读副本、密钥轮换与运行时（:8000）自身鉴权、镜像发布到 registry。
 >
-> 下文的生产拓扑、容器定义、Compose 文件、扩缩策略描述的是目标设计；当前部署仅为本地多进程开发模式。
+> 下文的生产拓扑、K8s/扩缩策略描述的是目标设计；当前可运行的是本地三进程或单机 Docker Compose。
 
 ## Overview
 

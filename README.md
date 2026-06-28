@@ -40,7 +40,23 @@ running the stack.
 
 ## Local Development
 
-### One-command start (recommended)
+### Docker (recommended — no local toolchains needed)
+
+If you have Docker, the whole stack builds and runs with one command — no Python/JDK/Node
+setup required. Health-gated dependency order (ai-runtime → control-plane → frontend) and
+persistent volumes are built in.
+
+```bash
+cp .env.example .env            # then set EVOCODE_JWT_SECRET (e.g. `openssl rand -hex 32`)
+docker compose up --build
+```
+
+Open **http://localhost:3000** and register — the first user becomes ADMIN. Data persists
+in named volumes (`control-plane-data`, `ai-runtime-data`) across `docker compose down`/`up`.
+The optional Node `ts-extractor` (repoPath knowledge-graph analysis) is not bundled in the
+runtime image; that feature degrades gracefully. See [docs/RUNNING.md](docs/RUNNING.md).
+
+### One-command start (local processes)
 
 The whole stack (AI Runtime :8000 → Control Plane :8080 → Frontend :3000) starts in
 dependency order, each waited on a health check, with the JWT secret generated and

@@ -1,0 +1,1 @@
+# 占位：保留 public/ 目录（Next.js 静态资源约定；Docker standalone 构建会 COPY 此目录）。

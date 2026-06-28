@@ -1,0 +1,10 @@
+# 排除构建上下文中的本地产物，加速构建并避免污染镜像。
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+data/
+tests/
+.dockerignore
+Dockerfile

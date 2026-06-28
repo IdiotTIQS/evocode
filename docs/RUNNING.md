@@ -38,7 +38,34 @@ then frontend. The one-command scripts enforce this with health-check gating.
 
 ---
 
-## One-command start
+## Docker (no local toolchains)
+
+With Docker installed, the entire stack builds and runs in containers — no local
+Python/JDK/Node needed. The only prerequisite above that still applies is Docker itself
+(Engine + Compose v2).
+
+```bash
+cp .env.example .env       # set EVOCODE_JWT_SECRET, e.g. `openssl rand -hex 32`
+docker compose up --build  # builds 3 images, starts in health-gated order
+# stop: docker compose down   (add -v to also wipe the data volumes)
+```
+
+- Ports published to the host: frontend `3000`, control-plane `8080`. The runtime (`8000`)
+  is internal-only (control plane reaches it at `http://ai-runtime:8000` over the compose
+  network).
+- Persistence: named volumes `control-plane-data` (H2) and `ai-runtime-data`
+  (checkpoints + knowledge-graph SQLite) survive `down`/`up`. `down -v` removes them.
+- Env: `EVOCODE_JWT_SECRET` comes from `.env`; the control plane refuses to start without it.
+  The browser-facing `NEXT_PUBLIC_CONTROL_PLANE_URL` is baked at image build time and
+  defaults to `http://localhost:8080` (the host-published port) — override via the
+  `frontend.build.args` in `docker-compose.yml` if you publish on a different host/port.
+- The Node `ts-extractor` (optional `repoPath` knowledge-graph analysis) is **not** in the
+  runtime image; that feature degrades to a placeholder graph. The core intent → approval →
+  apply flow is unaffected.
+
+---
+
+## One-command start (local processes)
 
 **Windows (PowerShell):**
 ```powershell

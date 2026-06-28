@@ -2,6 +2,7 @@
   "name": "@evocode/frontend",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

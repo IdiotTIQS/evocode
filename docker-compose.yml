@@ -1,0 +1,62 @@
+# EvoCode 一键容器编排：docker compose up
+#
+# 起栈顺序由 healthcheck + depends_on(condition) 保证：
+#   ai-runtime(:8000) → control-plane(:8080) → frontend(:3000)
+#
+# 首次：复制 .env.example 为 .env 并填 EVOCODE_JWT_SECRET（>=32 字节随机值），然后：
+#   docker compose up --build
+# 打开 http://localhost:3000 ，注册的第一个用户成为 ADMIN。
+
+services:
+  ai-runtime:
+    build: ./ai-runtime
+    # 运行时端点仅供控制平面内网调用，不对宿主发布（如需调试可临时加 ports）。
+    expose:
+      - "8000"
+    volumes:
+      - ai-runtime-data:/app/data   # checkpoints.db + pkg.db 持久化
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  control-plane:
+    build: ./control-plane
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring relaxed binding：PYTHON_RUNTIME_BASE_URL → python.runtime.base-url
+      PYTHON_RUNTIME_BASE_URL: http://ai-runtime:8000
+      EVOCODE_JWT_SECRET: ${EVOCODE_JWT_SECRET:?需在 .env 设置 >=32 字节随机密钥}
+    volumes:
+      - control-plane-data:/app/data   # H2 文件库持久化
+    depends_on:
+      ai-runtime:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # 浏览器在宿主机运行，访问宿主发布的控制平面端口。
+        NEXT_PUBLIC_CONTROL_PLANE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ai-runtime-data:
+  control-plane-data:
