@@ -67,7 +67,7 @@ on macOS/Linux use `.venv/bin/...`).
 
 With the Python runtime and Spring Boot control plane running, submit an intent
 through the gateway. The request is forwarded to the Python runtime, which runs a
-LangGraph `understand → plan` pipeline and returns a real planned `TaskGraph`:
+LangGraph `understand → plan → architect → generate → verify → review` pipeline and returns a real planned `TaskGraph`:
 
 ```bash
 curl -X POST http://localhost:8080/api/intents \
@@ -144,9 +144,16 @@ The analysis distinguishes `dependencies_of` (what a file transitively imports)
 from `impact_of` (who transitively imports it — what breaks if it changes), is
 cycle-safe (a file is never its own dependency), and is fully deterministic.
 
+The pipeline now runs six nodes: **understand → plan → architect → generate → verify → review**.
+
+The **Architect** node is deterministic and graph-driven: it reads the `ProjectGraph` produced by `understand` and emits `ArchitectureNotes` for each planned task — file locations, patterns to follow, constraints, and impact warnings. No LLM call is made here; the output is purely structural.
+
+The **Review** node evaluates the generated `ChangeSet` and the `VerificationResult`, then emits a `ReviewOutput` with a `verdict` (`approve`, `request_changes`, or `block`), a plain-language `summary`, and a list of `ReviewFinding` items (severity, filePath, message, optional suggestedFix). The verdict is surfaced in the frontend console.
+
 The Planner uses a deterministic stub LLM by default (no credentials needed). Set
 `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
-runtime to an OpenAI-compatible provider. A blank `intent` is rejected by the
+planning node to a real prompt-driven OpenAI call; prompts are loaded from
+`docs/prompts/`. A blank `intent` is rejected by the
 control plane with HTTP 400 (bean validation).
 
 ### Prerequisites
