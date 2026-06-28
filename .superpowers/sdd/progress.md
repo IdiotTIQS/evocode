@@ -18,3 +18,16 @@
 - Task 4: Review 节点 + ReviewOutput — complete (commits 883a3df..7561785, review clean; spec ✅ quality approved). Minor (final triage): _verdict default 可读性；密钥正则仅覆盖 OpenAI 风格。
 - Task 5: RunResult.review 四层契约镜像 — complete (commit 6f870da, spec ✅; mvn+tsc 均通过). 评审 Important(@JsonInclude) 经裁决为误报：全代码库既有可选字段均输出 null 无 @JsonInclude，前端 TS 字段可选可容忍 null，加注解反而破坏一致性。Pydantic 别名 filePath/suggestedFix 已验证正确。
 - Task 6: 控制台渲染 + 端到端文档 — done
+
+## 控制台 shadcn 布局（plan: docs/superpowers/plans/2026-06-28-console-shadcn-layout.md）
+基线 BASE=5dee1ce
+- Task 1: shadcn 初始化 + token 命名空间隔离 — complete (commit 7f6068a, review 规范✅质量approved；9 token 加 evo 前缀跨 10 文件无残留，11 组件就位，落地页未回退). Minor(final): skeleton.tsx 用全局 React 命名空间（shadcn 原样,tsc 过）。Task 5 需挂 Toaster/ThemeProvider。
+- Task 2: 边栏+工作台布局骨架 — complete (commit b35c41b, 规范✅质量approved). Important: 旧 console/page.tsx 双 main 嵌套 → Task 5 重写时务必移除内层 main 降为 section。Minor: Sidebar 渐变硬编码 #24B291(=chart-2 token)、导航用 <a> 非 <Link>(占位项)。
+- Task 3: 意图输入卡片 + 流水线阶段指示器 — complete (commit 2857050, 规范✅质量approved；phase 过去式→index 映射正确、空 phase 安全、终态全亮). Minor: 连接线恒 bg-border 不随进度变色(可选优化)。
+- Task 4: 结果 Tabs 分区 — complete (commit 874c8e4, 规范✅质量approved；5 Tab 齐全, TS strict 可选字段守卫完整, 三裁定配色对). Minor: suggestion 用 outline(brief/prompt 文档冲突,功能OK)、findings/diag 用 index key、React 隐式 import。
+- Task 5: 组装控制台页 — complete (commit ea5451c, 规范✅质量approved；双 main 已修复(单一 main), Toaster 挂载, 三态互斥, repoPath 空转 undefined). Minor: catch 吞没错误对象、所有失败弹同一文案(控制平面在线但 4xx/5xx 时误导)→ final 收尾改。
+
+### 控制台 final 全分支审查（Opus）：READY TO MERGE，无 Critical/Important
+收尾修复 commit 2ccf674：移动端导航可达（移除死菜单按钮，侧栏<md 变横向条）、PipelineStepper done prop（终态全亮）、新增 --success 语义 token 替换硬编码 #24B291。
+浏览器 QA：桌面+移动(390px) 均单一 main、5 导航项可达、3 输入在、空态渲染、success token 解析。tsc+build 通过。
+可延后 Minor：导航占位项用 <a>(href=#)、连接线不随进度变色、findings/diag index key、dark: 死样式（无主题切换）。
