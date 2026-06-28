@@ -2,6 +2,7 @@
 // frontend/src/app/(workspace)/dashboard/page.tsx
 // 仪表盘：顶部统计行 + 最近项目/会话/运行 + Agent 健康（流水线节点，静态诚实展示）。
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   FolderGit2,
   MessagesSquare,
@@ -101,12 +102,12 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="text-sm text-muted-foreground">
             还没有项目，去{" "}
-            <a
+            <Link
               href="/projects"
               className="rounded-sm font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               项目
-            </a>{" "}
+            </Link>{" "}
             页创建一个。
           </CardContent>
         </Card>
