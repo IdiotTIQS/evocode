@@ -52,3 +52,8 @@
 - Task 6: Session Workspace 三栏布局（最重要）— complete (commit 0b45eb1 + 死prop修, 规范✅质量approved；三栏响应式中栏始终在/左<lg/右<xl, 精简意图输入, appendMessage→submitIntent→result 链 /runs, 诚实标记右栏活动计划中+直接submitIntent标 TODO(T7), 会话不存在降级). Minor: 会话列表不即时重排、React 隐式 import。
 - Task 7: 审批门状态机 + 执行进度流模拟 — complete (commits 4b8413b..b8e7f52, 规范✅; 产品约束达成: submitIntent 仅在 approvePlan 后调用(无 Critical); 状态机/定时器清理/PipelineStepper 向后兼容/诚实标记齐全. Fix wave1: 防重入 inFlightRef+状态守卫(防双击两次流水线落盘) + diff 拒绝不回滚诚实标注). Minor: 无超时 AbortController、reset 死API、failed→planned 死分支。
 - Task 8: /console 收口 + 架构文档 — complete (commits e84bee2..f0b2c66, 规范✅质量approved；/console→redirect /dashboard, 落地页链接改 /dashboard, 架构文档诚实分层更新, 删孤儿 ConsoleShell/Sidebar). reviewer Important(commit 一致性)为环境误报已核实。
+
+### Agent Workspace 迁移 final 全分支审查（Opus）：READY TO MERGE（修后）
+final 修复 commit 40a4635：删孤儿 IntentForm/RunHistory + 修正文档虚标"复用"表述；UI 在 Projects/overview 标注 Project/Session 为浏览器本地（兑现计划明文约束）。
+8 点确认：领域模型一致✓ 路由层级完整✓ 审批门约束全链路成立(submitIntent 仅 approvePlan 后+防重入)✓ 诚实隔离✓ SSR 安全✓ 复用一致(修后)✓ 最小破坏(落地页/Run API 未回退)✓ 可扩展(换适配器即可)✓
+可延后 Minor 进 backlog：overview 硬编码计数=1、header 面包屑 slot 未接线、architect 节点 cosmetic 跳过、EXECUTION_STATES/reset 死导出。
