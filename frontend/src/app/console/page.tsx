@@ -71,7 +71,7 @@ export default function ConsolePage() {
         </div>
       ) : result ? (
         <div className="space-y-6">
-          <PipelineStepper phase={result.phase} />
+          <PipelineStepper phase={result.phase} done={result.status === "completed"} />
           <ResultTabs result={result} />
         </div>
       ) : (

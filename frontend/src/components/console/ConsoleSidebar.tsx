@@ -21,13 +21,18 @@ const navLinkClass =
 
 export function ConsoleSidebar({ className }: { className?: string }) {
   return (
-    <aside className={cn("flex flex-col gap-6 bg-background p-4", className)}>
+    <aside
+      className={cn(
+        "flex flex-col gap-4 bg-background p-4 md:gap-6",
+        className
+      )}
+    >
       <div className="flex items-center gap-2.5 px-2">
-        <div className="size-8 rounded-lg bg-gradient-to-br from-primary to-[#24B291]" />
+        <div className="size-8 rounded-lg bg-gradient-to-br from-primary to-success" />
         <span className="text-base font-semibold tracking-tight">EvoCode</span>
       </div>
 
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-row flex-wrap gap-1 md:flex-col">
         {navItems.map(({ label, href, icon: Icon, active }) => (
           <a
             key={label}
@@ -41,7 +46,7 @@ export function ConsoleSidebar({ className }: { className?: string }) {
         ))}
       </nav>
 
-      <div className="mt-auto">
+      <div className="md:mt-auto">
         <a href="/" className={navLinkClass}>
           <ArrowLeft className="size-4" />
           返回首页

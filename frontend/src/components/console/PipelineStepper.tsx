@@ -29,8 +29,15 @@ const PHASE_LABEL: Record<(typeof PHASE_ORDER)[number], string> = {
   review: "审查",
 };
 
-export function PipelineStepper({ phase }: { phase: string }) {
-  const currentIndex = PHASE_TO_INDEX[phase] ?? -1;
+export function PipelineStepper({
+  phase,
+  done = false,
+}: {
+  phase: string;
+  done?: boolean;
+}) {
+  // 同步返回终态时，整条流水线已完成：所有节点显示对勾，不再有"进行中"节点。
+  const currentIndex = done ? PHASE_ORDER.length : (PHASE_TO_INDEX[phase] ?? -1);
 
   return (
     <div

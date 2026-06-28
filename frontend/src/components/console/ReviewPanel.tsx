@@ -9,7 +9,7 @@ const verdictMap = {
   approve: {
     Icon: CheckCircle2,
     label: "通过 approve",
-    className: "text-[#24B291]",
+    className: "text-success",
   },
   request_changes: {
     Icon: AlertTriangle,

@@ -81,6 +81,8 @@ body {
     --accent-foreground: 215 100% 50%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
+    --success: 165 66% 42%;              /* #24B291 青/teal，语义成功色 */
+    --success-foreground: 0 0% 100%;
     --border: 215 22% 89%;               /* #DDE2E9 */
     --input: 215 22% 89%;
     --ring: 215 100% 50%;
@@ -107,6 +109,8 @@ body {
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));

@@ -23,7 +23,7 @@ function TaskKindBadge({ kind }: { kind: EngineeringTask["kind"] }) {
       return <Badge>frontend</Badge>;
     case "backend":
       return (
-        <Badge className="bg-[#24B291] text-white hover:bg-[#24B291]/90">
+        <Badge className="bg-success text-success-foreground hover:bg-success/90">
           backend
         </Badge>
       );
@@ -110,7 +110,7 @@ export function ResultTabs({ result }: { result: RunResult }) {
 
       <TabsContent value="files" className="space-y-3">
         {result.appliedFiles && result.appliedFiles.length > 0 ? (
-          <p className="text-sm text-[#24B291]">
+          <p className="text-sm text-success">
             ✓ 已写入目标仓库 {result.appliedFiles.length} 个文件
           </p>
         ) : null}
@@ -136,7 +136,7 @@ export function ResultTabs({ result }: { result: RunResult }) {
         {result.verification && result.verification.checked ? (
           <div className="space-y-3">
             {result.verification.passed ? (
-              <p className="text-sm text-[#24B291]">✓ 类型检查通过</p>
+              <p className="text-sm text-success">✓ 类型检查通过</p>
             ) : (
               <p className="text-sm text-destructive">
                 ✗ {result.verification.diagnosticCount} 个问题
