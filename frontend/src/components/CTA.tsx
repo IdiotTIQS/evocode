@@ -29,7 +29,7 @@ export function CTA() {
                 {cta.button}
               </a>
               <a
-                href="/console"
+                href="/dashboard"
                 className="rounded-full border border-white/30 px-7 py-3 font-medium text-white transition hover:border-white"
               >
                 打开控制台

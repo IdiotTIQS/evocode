@@ -28,7 +28,7 @@ export function Hero() {
         </p>
         <div className="fade-up mt-10 flex flex-wrap items-center justify-center gap-4">
           <a
-            href="/console"
+            href="/dashboard"
             className="rounded-full bg-[var(--color-evo-accent)] px-7 py-3 font-medium text-white shadow-lg shadow-[var(--color-evo-accent)]/20 transition hover:bg-[var(--color-evo-accent-strong)]"
           >
             {hero.primaryCta}
