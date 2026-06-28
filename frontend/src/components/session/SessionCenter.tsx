@@ -1,17 +1,23 @@
 "use client";
 // frontend/src/components/session/SessionCenter.tsx
-// 中栏（主交互）：当前 session 标题 + 精简意图输入（仅 Textarea + 提交）+ 提交后结果区
-// （PipelineStepper + ResultTabs）。projectId/repoPath 来自 session 所属 project，不在此输入。
+// 中栏（主交互）：当前 session 标题 + 意图输入 + 审批门状态机驱动的执行流。
 //
-// 本任务用占位编排：提交后直接调一次 submitIntent。审批门与流式留给下个任务。
-import { useState } from "react";
+// 本任务用 useExecution 替换 Task 6 的直接 submitIntent：
+//   提交意图 → planning → 【真实暂停】plan gate（批准前不调后端）
+//   批准计划 → coding/testing/reviewing（此时才真正调 submitIntent）→ diff gate
+//   批准 diff → completed（渲染 ResultTabs）。
+// PipelineStepper 通过 mapStateToStepper 把 8 态 ExecutionState 映射到现有 phase
+// 字符串（不改 PipelineStepper，保持 Run 详情页复用）。
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { submitIntent, ControlPlaneError } from "@/lib/api";
+import { useExecution } from "@/lib/execution/useExecution";
+import { mapStateToStepper } from "@/lib/execution/executionMachine";
 import { appendMessage } from "@/lib/stores/sessionStore";
 import type { RunResult, Session } from "@/types/domain";
 import { PipelineStepper } from "@/components/console/PipelineStepper";
 import { ResultTabs } from "@/components/console/ResultTabs";
+import { ApprovalGate } from "@/components/session/ApprovalGate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -30,52 +36,90 @@ export function SessionCenter({
   className?: string;
 }) {
   const [intent, setIntent] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<RunResult | null>(null);
+  const exec = useExecution({
+    projectId,
+    ...(repoPath !== undefined ? { repoPath } : {}),
+  });
+
+  // 防止 completed 时重复回调/记录。
+  const completedRunRef = useRef<string | null>(null);
 
   const trimmed = intent.trim();
-  const canSubmit = trimmed.length > 0 && !loading;
+  const isIdle = exec.state === "queued" || exec.state === "failed";
+  const isRunning =
+    exec.state === "planning" ||
+    exec.state === "coding" ||
+    exec.state === "testing" ||
+    exec.state === "reviewing";
+  const canSubmit = trimmed.length > 0 && isIdle;
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
-
-    // 记录用户意图。
-    appendMessage(session.id, { role: "user", kind: "intent", text: trimmed });
-    setLoading(true);
-    setResult(null);
-
-    try {
-      // TODO(T7): 接入审批门状态机替换此处直接 submitIntent
-      const runResult = await submitIntent({
-        intent: trimmed,
-        projectId,
-        ...(repoPath !== undefined ? { repoPath } : {}),
-      });
+  // completed：记录消息 + 回传结果（仅一次）。
+  useEffect(() => {
+    if (
+      exec.state === "completed" &&
+      exec.result &&
+      completedRunRef.current !== exec.result.runId
+    ) {
+      completedRunRef.current = exec.result.runId;
       appendMessage(session.id, {
         role: "agent",
         kind: "result",
-        text: `运行完成：${runResult.phase}`,
-        runId: runResult.runId,
+        text: `运行完成：${exec.result.phase}`,
+        runId: exec.result.runId,
       });
-      setResult(runResult);
-      onResult(runResult);
-      setIntent("");
-    } catch (err: unknown) {
-      const detail =
-        err instanceof ControlPlaneError
-          ? `控制平面错误 ${err.status}`
-          : "无法连接控制平面";
+      onResult(exec.result);
+    }
+  }, [exec.state, exec.result, session.id, onResult]);
+
+  // failed：提示并记录。
+  useEffect(() => {
+    if (exec.state === "failed" && exec.error) {
       appendMessage(session.id, {
         role: "agent",
         kind: "status",
-        text: `提交失败：${detail}`,
+        text: `提交失败：${exec.error}`,
       });
-      toast.error("意图提交失败", { description: detail });
-    } finally {
-      setLoading(false);
+      toast.error("意图执行失败", { description: exec.error });
     }
+  }, [exec.state, exec.error, session.id]);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    completedRunRef.current = null;
+    appendMessage(session.id, { role: "user", kind: "intent", text: trimmed });
+    exec.submitIntent(trimmed);
   }
+
+  function handleApprovePlan() {
+    appendMessage(session.id, {
+      role: "user",
+      kind: "status",
+      text: "已批准计划，开始生成代码",
+    });
+    exec.approvePlan();
+  }
+
+  function handleApproveDiff() {
+    appendMessage(session.id, {
+      role: "user",
+      kind: "status",
+      text: "已批准变更并应用",
+    });
+    exec.approveDiff();
+  }
+
+  function handleReject() {
+    appendMessage(session.id, {
+      role: "user",
+      kind: "status",
+      text: exec.gate === "diff" ? "已拒绝变更" : "已拒绝计划",
+    });
+    exec.reject();
+  }
+
+  const stepper = mapStateToStepper(exec.state, exec.gate);
+  const showPipeline = exec.state !== "queued" && exec.state !== "failed";
 
   return (
     <section
@@ -85,7 +129,7 @@ export function SessionCenter({
       <div className="space-y-1">
         <h1 className="truncate text-2xl font-semibold">{session.title}</h1>
         <p className="text-sm text-muted-foreground">
-          描述你想要的改动，提交后会触发一次运行。
+          描述你想要的改动。提交后会先生成计划，批准后才会执行代码生成。
         </p>
       </div>
 
@@ -96,23 +140,49 @@ export function SessionCenter({
           onChange={(e) => setIntent(e.target.value)}
           placeholder="例如：给用户表新增分页接口并补充测试"
           rows={4}
-          disabled={loading}
+          disabled={!isIdle}
           className="resize-y"
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={!canSubmit}>
-            {loading ? "运行中…" : "提交意图"}
+            {isRunning || exec.state === "waiting_approval"
+              ? "进行中…"
+              : "提交意图"}
           </Button>
         </div>
       </form>
 
-      {result ? (
+      {showPipeline ? (
         <div className="space-y-6">
-          <PipelineStepper
-            phase={result.phase}
-            done={result.status === "completed"}
-          />
-          <ResultTabs result={result} />
+          <PipelineStepper phase={stepper.phase} done={stepper.done} />
+
+          {/* 模拟阶段文案（planning/coding/testing/reviewing）。 */}
+          {exec.phaseLabel ? (
+            <p
+              className="text-sm text-muted-foreground motion-safe:animate-pulse"
+              aria-live="polite"
+            >
+              {exec.phaseLabel}
+            </p>
+          ) : null}
+
+          {/* 审批门：waiting_approval 时按 gate 渲染计划/diff 审批面板。 */}
+          {exec.state === "waiting_approval" && exec.gate ? (
+            <ApprovalGate
+              gate={exec.gate}
+              {...(exec.plan !== undefined ? { plan: exec.plan } : {})}
+              {...(exec.result !== undefined ? { result: exec.result } : {})}
+              onApprove={
+                exec.gate === "plan" ? handleApprovePlan : handleApproveDiff
+              }
+              onReject={handleReject}
+            />
+          ) : null}
+
+          {/* completed：完整结果。 */}
+          {exec.state === "completed" && exec.result ? (
+            <ResultTabs result={exec.result} />
+          ) : null}
         </div>
       ) : null}
     </section>
