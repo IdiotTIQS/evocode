@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* ===== EvoCode 设计 token（设计语言借鉴火山引擎，内容为 EvoCode） ===== */
+@theme {
+  /* 配色：白底、近黑文字、灰副文、蓝色强调、青色点缀、浅蓝区块底 */
+  --color-ink: rgb(12, 13, 14);
+  --color-ink-soft: rgb(29, 33, 41);
+  --color-muted: rgb(115, 122, 135);
+  --color-accent: rgb(0, 106, 255);
+  --color-accent-strong: rgb(0, 82, 204);
+  --color-teal: rgb(36, 178, 145);
+  --color-surface: rgb(255, 255, 255);
+  --color-surface-alt: rgb(244, 248, 252);
+  --color-border-soft: rgb(221, 226, 233);
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+
+  --radius-card: 16px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 细体大标题（火山引擎风格：weight 300 的大字标题） */
+.display {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* 渐入动画（进入视口） */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 毛玻璃导航 */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
