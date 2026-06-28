@@ -34,6 +34,10 @@ EvoCode is a four-layer agent-driven software engineering platform that enables 
 - **`services/`** - Business service implementations and utilities
 - **`contracts/`** - Cross-layer contract definitions (single source of truth)
 
+See [docs/WIRING.md](docs/WIRING.md) for the as-built end-to-end request flow (auth →
+approval gates → SSE → persistence → ownership) and [docs/RUNNING.md](docs/RUNNING.md) for
+running the stack.
+
 ## Local Development
 
 ### One-command start (recommended)

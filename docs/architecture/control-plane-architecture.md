@@ -1,11 +1,11 @@
 # Control Plane Architecture
 
-> **实现状态（截至 increment 7） / Implementation Status (as of increment 7)**
-> 本文档描述的是**目标架构**。当前 Control Plane 是一个轻量转发层 + 运行持久化：**无鉴权、仅 localhost**。
-> - ✅ 已构建：`POST /api/intents` 转发到 AI Runtime `POST /runs`（IntentController + PythonRuntimeClient）；CORS 配置（WebCorsConfig）；四层 DTO 契约镜像（含 ReviewOutput/ReviewFinding）；`/actuator/health`；**Run 持久化（Spring Data JPA + H2 文件库，混合存储：标量列 + RunResult JSON）与历史查询端点 `GET /api/runs`、`GET /api/runs/{runId}`**。
-> - 📋 计划中（pom.xml 无对应依赖、代码无对应包）：Spring Security / JWT 鉴权授权（无 `security/` 包）；PostgreSQL（当前用 H2，无 `domain/` 完整领域模型）；Spring WebFlux / SSE 流式；Redis 会话与运行队列；多租户边界；Task 级状态跟踪；项目管理端点（`/api/projects` 等）。
+> **实现状态（截至 increment：鉴权 + 持久化 checkpointer） / Implementation Status**
+> Control Plane 现在是**鉴权边界 + 编排转发 + 持久化**层。端到端接线见 [docs/WIRING.md](../WIRING.md)。
+> - ✅ 已构建：**Spring Security + JWT 鉴权**（`security/` 等价于 `config/SecurityConfig` + `auth/` 包：UserRecord/JwtService/JwtAuthFilter/AuthController；BCrypt；首用户 ADMIN）——`/api/auth/**` 与 `/actuator/health` 放行，其余 `/api/**` 需 Bearer token，401 入口点。**所有权隔离 RBAC**：Project/Session/Run 带 ownerId，list/get/mutate 按当前用户作用域（非属主 404，ADMIN 全见）。**意图编排**：`POST /api/intents` 转发 AI Runtime；**两段式审批门** `POST /api/runs/{id}/approve`（resume）。**SSE 透传**：`POST /api/runs/stream`、`/api/runs/{id}/approve/stream`（`SseEmitter` + 虚拟线程，逐节点转发，终帧持久化）。**持久化**（Spring Data JPA + H2 文件库）：User/Project/Session/Message/Run，含 `GET /api/runs[?limit=&sessionId=]`、`/api/runs/{id}`、Project/Session CRUD；Run↔Session 关联。CORS（SecurityConfig 内，放行 localhost:3000，含 PATCH/DELETE）。
+> - 📋 计划中：PostgreSQL（当前 H2）；Redis 会话/队列；多租户 Org 边界；`POST /api/runs/{id}/reject` 真后端；Task 级状态跟踪；token 撤销/刷新。
 >
-> 下文中的领域模型、完整 API 表、编排流程描述的是目标设计；目前真实存在的是 `POST /api/intents`、`GET /api/runs`、`GET /api/runs/{runId}` 与健康检查端点。
+> 下文中更宏大的领域模型、目标 API 表与编排流程为目标设计；当前真实端点见上方 ✅ 与 [docs/WIRING.md](../WIRING.md) 的端点映射。
 
 ## Overview
 

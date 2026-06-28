@@ -1,10 +1,10 @@
 # System Overview
 
-> **实现状态（截至 increment 6） / Implementation Status (as of increment 6)**
-> 本文档描述的是**目标架构**，部分能力尚未实现。当前运行模式为本地、无鉴权。
-> - ✅ 已构建：意图提交链路（Frontend → Control Plane `POST /api/intents` → AI Runtime `POST /runs`）；LangGraph 流水线 understand→plan→architect→generate→verify→review；SQLite 知识图谱存储。
-> - 🚧 部分：codegen 仍是确定性模板（非真实 LLM 生成代码），只写 `evocode_generated/`；OpenAI provider 仅用于 plan 阶段。
-> - 📋 计划中：鉴权/授权（当前**无鉴权，仅 localhost**）、多租户边界、Run 状态持久化、SSE 实时流、RAG/向量库、代码执行沙箱、git/PR 与 CI/CD 集成、PostgreSQL/Redis。
+> **实现状态（截至 increment：鉴权 + 持久化 checkpointer） / Implementation Status**
+> 本文档描述**目标架构**；下方区分已落地与计划中。端到端真实接线见 [docs/WIRING.md](../WIRING.md)。
+> - ✅ 已构建：完整意图闭环 Frontend → Control Plane → AI Runtime；**JWT + RBAC 鉴权**（注册/登录，首用户 ADMIN，所有 `/api/**` 需 token，Project/Session/Run 按 ownerId 隔离）；**两段式审批门**（LangGraph `interrupt_before=["generate","apply"]`，批准前磁盘零写入）；**逐节点 SSE 实时流**（带 POST 降级）；7 节点流水线 understand→plan→architect→generate→verify→review→apply；**持久化**：Project/Session/Message/Run（控制平面 H2）+ 审批门 checkpoint（运行时 SqliteSaver，扛进程重启）；Run↔Session 关联；SQLite 知识图谱缓存。
+> - 🚧 部分：codegen 仍是确定性模板（非真实 LLM 生成代码内容），只写 `evocode_generated/`；OpenAI provider 仅用于 plan 阶段。
+> - 📋 计划中：多租户 Org 边界；`POST /api/runs/{id}/reject` 真后端（当前拒绝仅前端重置）；RAG/向量库；代码执行沙箱；git/PR 与 CI/CD；PostgreSQL/Redis；容器化。仍为**本地多进程、localhost 取向**（CORS 仅放行 localhost:3000，运行时自身无鉴权、信任控制平面）。
 
 ## Four-Layer Architecture
 

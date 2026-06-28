@@ -160,10 +160,12 @@ then approve the diff. Also note: `repoPath` must point to a directory the runti
 can access; without `repoPath` a `changeSet` is still produced but nothing is applied to a
 target repo.
 
-**Pending runs disappear after restarting the control plane / runtime.**
-The LangGraph approval checkpoints are held in-memory (MemorySaver). Restarting the runtime
-drops any run awaiting approval. Completed runs persist in H2. A durable checkpointer is a
-planned increment.
+**Do pending runs survive a runtime restart?**
+Yes. LangGraph approval checkpoints are persisted to SQLite (`ai-runtime/data/checkpoints.db`
+via `SqliteSaver`, keyed by `thread_id=runId`), so a run paused at the plan or diff gate can
+be resumed after restarting the AI runtime. Override the path with `EVOCODE_CHECKPOINT_DB`
+(set to `:memory:` for an ephemeral, non-persistent checkpointer). Completed-run history and
+Project/Session/Message data persist separately in the control-plane H2 DB.
 
 **`mvn` / `pnpm` / `python` not found.**
 Check the Prerequisites above are installed and on PATH. `setup` must finish once before

@@ -3,6 +3,12 @@ import tempfile
 import shutil
 import pytest
 
+# 在任何测试模块 import run_service/main（它们在模块级 build_graph()）之前，
+# 把 checkpoint DB 指向临时文件，避免污染 ai-runtime/data/checkpoints.db。
+# 必须在 import 时设置，因为图是模块级单例、构建早于 fixture。
+_CKPT_TMP = tempfile.mkdtemp(prefix="evocode_ckpt_")
+os.environ.setdefault("EVOCODE_CHECKPOINT_DB", os.path.join(_CKPT_TMP, "checkpoints.db"))
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _isolate_pkg_db(tmp_path_factory):

@@ -1,10 +1,12 @@
 # AI Runtime Architecture
 
-> **实现状态（截至 increment 6） / Implementation Status (as of increment 6)**
-> 本文档描述的是**目标架构**。AI Runtime 是目前最成熟的一层，但部分技术栈与端点仍为计划中。
-> - ✅ 已构建：6 节点 LangGraph 流水线 understand→plan→architect→generate→verify→review；ts-morph（Node 子进程）抽取 + stdlib `sqlite3` 知识图谱缓存 + 影响分析；确定性 StubLlmProvider（默认）与门控的 OpenAiLlmProvider（plan 阶段、`OPENAI_API_KEY` 门控）；确定性 architect/generate/review；只读 TS 类型检查（verify）；提示词加载 `docs/prompts/*.md`。端点：`GET /health`、`POST /runs`。
+> **实现状态（截至 increment：鉴权 + 持久化 checkpointer） / Implementation Status**
+> 本文档描述的是**目标架构**。AI Runtime 是目前最成熟的一层，但部分技术栈与端点仍为计划中。端到端接线见 [docs/WIRING.md](../WIRING.md)。
+> - ✅ 已构建：**7 节点 LangGraph 流水线** understand→plan→architect→generate→verify→review→apply，带 **两段式审批门**（`interrupt_before=["generate","apply"]`，批准前磁盘零写入；`apply` 是唯一落盘节点）；**持久化 checkpointer**（`SqliteSaver`，`data/checkpoints.db`，按 `thread_id=runId`，待批准的 run 扛进程重启）；ts-morph（Node 子进程）抽取 + stdlib `sqlite3` 知识图谱缓存 + 影响分析；确定性 StubLlmProvider（默认）与门控的 OpenAiLlmProvider（plan 阶段、`OPENAI_API_KEY` 门控）；确定性 architect/generate/review；只读 TS 类型检查（verify）；提示词加载 `docs/prompts/*.md`。端点：`GET /health`、`POST /runs`、`POST /runs/{id}/resume`，及 SSE 变体 `POST /runs/stream`、`POST /runs/{id}/resume/stream`。
 > - 🚧 部分：codegen 仍是确定性模板（非真实 LLM 生成代码内容），只写 `evocode_generated/` 子目录、不改既有文件；OpenAI provider 仅用于 plan，generate/architect/review 不调用 LLM。
 > - 📋 计划中：LangChain、ChromaDB、sentence-transformers、SQLAlchemy、tree-sitter；RAG / 向量检索 / memory 工具；Spring Boot 项目抽取；RENDERS/CALLS 边；自修复循环；`POST /tasks/{id}/execute` 端点（不存在）。
+>
+> 注：运行时端点自身**无鉴权**，仅供控制平面在 localhost 调用（鉴权在控制平面层）。
 
 ## Overview
 
@@ -35,7 +37,7 @@ The actual `pyproject.toml` declares only `fastapi`, `uvicorn`, `pydantic`, and 
 
 ## Agent Graph
 
-> **实现状态**：当前实现是一条线性的 6 节点流水线 **understand → plan → architect → generate → verify → review**（已含 increment 6）。下方按任务类型分支（frontend/backend/test 分别走不同 generate 节点）的图描述的是**目标设计**；目前只有单一确定性的 `generate` 节点，且按模板写入 `evocode_generated/`。
+> **实现状态**：当前实现是一条线性的 **7 节点流水线** **understand → plan → architect → generate → verify → review → apply**，带 `interrupt_before=["generate","apply"]` 两段式审批门（仅 `apply` 落盘，批准前磁盘零写入），checkpoint 由 `SqliteSaver` 持久化。下方按任务类型分支（frontend/backend/test 分别走不同 generate 节点）的图描述的是**目标设计**；目前只有单一确定性的 `generate` 节点，且按模板写入 `evocode_generated/`。
 
 The agent graph is a directed graph of nodes (agents) connected by conditional edges. The graph processes each intent through a defined sequence of phases.
 

@@ -1,9 +1,9 @@
 # Deployment Architecture
 
-> **实现状态（截至 increment 6） / Implementation Status (as of increment 6)**
-> 本文档描述的是**目标部署架构**。当前唯一真实的运行模式是**本地、四个进程、无鉴权、仅 localhost**。
-> - ✅ 已构建：本地以进程方式运行 Frontend（:3000）、Control Plane（:8080）、AI Runtime（:8000）；Frontend → Control Plane → AI Runtime 直连。
-> - 📋 计划中：容器化与 Dockerfile / Docker Compose、PostgreSQL（:5432）、Redis（:6379）、负载均衡 / HTTPS、私有网络与内部 DNS、水平扩缩与读副本、JWT 密钥等生产配置——目前均未落地，相关服务（PostgreSQL/Redis）也未接入。
+> **实现状态（截至 increment：鉴权 + 持久化 checkpointer） / Implementation Status**
+> 本文档描述的是**目标部署架构**。当前真实运行模式是**本地、三个进程、localhost 取向**——已有 JWT 鉴权但尚未容器化。启动见 [docs/RUNNING.md](../RUNNING.md)。
+> - ✅ 已构建：本地以进程方式运行 Frontend（:3000）、Control Plane（:8080）、AI Runtime（:8000），一键脚本 `scripts/start.{ps1,sh}` 有序启动 + 健康检查 + 自动注入 `EVOCODE_JWT_SECRET`；Frontend → Control Plane → AI Runtime；**JWT 鉴权 + 所有权隔离已落地**；持久化用 H2 文件库（控制平面）+ SQLite（运行时 checkpoint/知识图谱）。
+> - 📋 计划中：容器化与 Dockerfile / Docker Compose、PostgreSQL（:5432）、Redis（:6379）、负载均衡 / HTTPS、私有网络与内部 DNS、水平扩缩与读副本、密钥轮换与运行时鉴权——目前均未落地。
 >
 > 下文的生产拓扑、容器定义、Compose 文件、扩缩策略描述的是目标设计；当前部署仅为本地多进程开发模式。
 
