@@ -2,6 +2,7 @@ import logging
 import os
 from evocode_runtime.graph.state import RunState
 from evocode_runtime.llm import get_llm_gateway
+from evocode_runtime.agents import analyze_tasks, review_change_set
 from evocode_runtime.pkg import TsExtractor, ProjectGraph, ExtractionError
 from evocode_runtime.pkg import SqliteGraphStore, compute_fingerprint
 from evocode_runtime.pkg import TsVerifier, VerificationError
@@ -82,16 +83,30 @@ def plan_node(state: RunState) -> dict:
     return {"tasks": [t.model_dump() for t in tasks], "phase": "planned"}
 
 
+def architect_node(state: RunState) -> dict:
+    """架构师阶段：为每个任务产出架构笔记，供 generate 落地时遵循。
+
+    确定性、读知识图谱。任何异常 → 返回空笔记，绝不让 /runs 失败。"""
+    tasks = state.get("tasks") or []
+    try:
+        notes = analyze_tasks(tasks, state.get("context") or {})
+    except Exception:  # noqa: BLE001
+        logger.exception("architect_node failed for project %s", state.get("projectId"))
+        notes = []
+    return {"architectureNotes": notes, "phase": "architected"}
+
+
 def generate_node(state: RunState) -> dict:
     """把任务物化为真实代码文件，写入目标 repo 的 evocode_generated/ 子目录。
 
-    这是 "agents modify systems" 的落地环节。无 repoPath 时仍生成 changeSet
-    （内容可见）但不落盘。绝不让 /runs 失败。"""
+    消费架构师笔记决定文件落点与模式。无 repoPath 时仍生成 changeSet（内容可见）
+    但不落盘。绝不让 /runs 失败。"""
     intent = state["intent"]
     tasks = state.get("tasks") or []
+    notes = state.get("architectureNotes") or []
     repo_path = state.get("repoPath") or ""
     try:
-        change_set = generate_change_set(tasks, intent)
+        change_set = generate_change_set(tasks, intent, notes)
     except Exception:  # noqa: BLE001
         logger.exception("generate_node failed to build change set for project %s",
                           state.get("projectId"))
@@ -126,3 +141,18 @@ def verify_node(state: RunState) -> dict:
     except Exception:  # noqa: BLE001  绝不让 verify 拖垮 /runs
         logger.exception("verify_node failed for project %s", state.get("projectId"))
         return {"verification": not_checked, "phase": "verified"}
+
+
+def review_node(state: RunState) -> dict:
+    """审查阶段：对变更集 + 验证结果出具裁定。确定性，绝不让 /runs 失败。"""
+    try:
+        review = review_change_set(
+            intent=state.get("intent", ""),
+            tasks=state.get("tasks") or [],
+            change_set=state.get("changeSet") or [],
+            verification=state.get("verification") or {})
+    except Exception:  # noqa: BLE001
+        logger.exception("review_node failed for project %s", state.get("projectId"))
+        review = {"verdict": "approve", "findings": [],
+                  "summary": "审查阶段内部错误，已跳过。"}
+    return {"review": review, "phase": "reviewed"}

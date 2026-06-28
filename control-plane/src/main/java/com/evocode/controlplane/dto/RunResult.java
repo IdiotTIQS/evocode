@@ -11,5 +11,6 @@ public record RunResult(
     List<ChangeFile> changeSet,
     List<String> appliedFiles,
     VerificationResult verification,
+    ReviewOutput review,
     String message
 ) {}

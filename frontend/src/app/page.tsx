@@ -69,6 +69,28 @@ export default function Home() {
                 : `✗ ${result.verification.diagnosticCount} 个问题`}
             </p>
           )}
+          {result.review && (
+            <div style={{ marginTop: 16 }}>
+              <h3>
+                审查裁定：{result.review.verdict === "approve"
+                  ? "✓ 通过 (approve)"
+                  : result.review.verdict === "request_changes"
+                  ? "⚠ 需修改 (request_changes)"
+                  : "✗ 阻断 (block)"}
+              </h3>
+              <p>{result.review.summary}</p>
+              {result.review.findings.length > 0 && (
+                <ul>
+                  {result.review.findings.map((f, i) => (
+                    <li key={i}>
+                      <strong>[{f.severity}]</strong> <code>{f.filePath}</code> — {f.message}
+                      {f.suggestedFix ? <em> 建议：{f.suggestedFix}</em> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </section>
       )}
       {error && <p style={{ color: "red" }}>{error}</p>}

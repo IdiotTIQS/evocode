@@ -52,3 +52,40 @@ def test_deterministic():
     a = generate_change_set(tasks, "same intent")
     b = generate_change_set(tasks, "same intent")
     assert a == b
+
+
+def test_generate_uses_architect_file_location():
+    tasks = [{"id": "task-1", "title": "联系页", "kind": "frontend", "description": "做页面"}]
+    notes = [{
+        "taskId": "task-1",
+        "fileLocations": {"primary": "evocode_generated/components/ContactPage.tsx"},
+        "patternsToFollow": ["沿用现有组件命名风格（如 Button, Card）"],
+        "constraints": ["最小化改动"],
+        "newAbstractions": [], "existingToExtend": [], "impactWarning": None,
+    }]
+    files = generate_change_set(tasks, "add a contact page", notes)
+    assert any(f["path"] == "evocode_generated/components/ContactPage.tsx" for f in files)
+    # 架构模式应被写入生成文件的注释，形成可见的可追溯链路
+    target = next(f for f in files if f["path"].endswith("ContactPage.tsx"))
+    assert "沿用现有组件命名风格" in target["content"]
+
+
+def test_generate_without_notes_is_backward_compatible():
+    tasks = [{"id": "task-1", "title": "联系页", "kind": "frontend", "description": "做页面"}]
+    files_no_notes = generate_change_set(tasks, "x")
+    files_none = generate_change_set(tasks, "x", None)
+    assert files_no_notes == files_none
+    assert len(files_no_notes) == 1
+    assert files_no_notes[0]["path"].startswith("evocode_generated/components/")
+
+
+def test_generate_rejects_backslash_traversal_in_note_path():
+    tasks = [{"id": "task-1", "title": "X", "kind": "frontend", "description": "d"}]
+    notes = [{"taskId": "task-1",
+              "fileLocations": {"primary": "evocode_generated/foo\\..\\..\\evil.tsx"},
+              "patternsToFollow": [], "constraints": [], "impactWarning": None,
+              "newAbstractions": [], "existingToExtend": []}]
+    files = generate_change_set(tasks, "x", notes)
+    # 恶意反斜杠穿越路径必须被拒绝，回退到默认 components/ 落点
+    assert all("evil" not in f["path"] for f in files)
+    assert files[0]["path"].startswith("evocode_generated/components/")

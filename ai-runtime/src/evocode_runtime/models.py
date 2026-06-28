@@ -16,6 +16,23 @@ class EngineeringTask(BaseModel):
     description: str
 
 
+class Abstraction(BaseModel):
+    name: str
+    kind: str  # interface/type/class/component
+    description: str
+
+
+class ArchitectureNotes(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    task_id: str = Field(alias="taskId")
+    file_locations: dict[str, str] = Field(default_factory=dict, alias="fileLocations")
+    new_abstractions: list[Abstraction] = Field(default_factory=list, alias="newAbstractions")
+    existing_to_extend: list[str] = Field(default_factory=list, alias="existingToExtend")
+    patterns_to_follow: list[str] = Field(default_factory=list, alias="patternsToFollow")
+    impact_warning: str | None = Field(default=None, alias="impactWarning")
+    constraints: list[str] = Field(default_factory=list)
+
+
 class TaskGraph(BaseModel):
     tasks: list[EngineeringTask] = Field(default_factory=list)
 
@@ -50,6 +67,20 @@ class VerificationResult(BaseModel):
     diagnostics: list[Diagnostic] = Field(default_factory=list)
 
 
+class ReviewFinding(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    severity: Literal["critical", "major", "minor", "suggestion"]
+    file_path: str = Field(alias="filePath")
+    message: str
+    suggested_fix: str | None = Field(default=None, alias="suggestedFix")
+
+
+class ReviewOutput(BaseModel):
+    verdict: Literal["approve", "request_changes", "block"]
+    findings: list[ReviewFinding] = Field(default_factory=list)
+    summary: str
+
+
 class RunResult(BaseModel):
     run_id: str = Field(alias="runId")
     status: Literal["completed", "failed"]
@@ -60,5 +91,6 @@ class RunResult(BaseModel):
     change_set: list[ChangeFile] = Field(default_factory=list, alias="changeSet")
     applied_files: list[str] = Field(default_factory=list, alias="appliedFiles")
     verification: "VerificationResult | None" = Field(default=None)
+    review: "ReviewOutput | None" = Field(default=None)
 
     model_config = ConfigDict(populate_by_name=True)

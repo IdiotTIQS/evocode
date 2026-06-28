@@ -9,8 +9,8 @@ def test_graph_produces_taskgraph():
          "context": {}, "phase": "", "tasks": [],
          "changeSet": [], "applied": [], "verification": {}},
         config=config)
-    # 流水线终态：understand→plan→generate→verify
-    assert result["phase"] == "verified"
+    # 流水线终态：understand→plan→generate→verify→review
+    assert result["phase"] == "reviewed"
     assert len(result["tasks"]) >= 1
     assert any(t["kind"] == "frontend" for t in result["tasks"])
     # generate 阶段产出了真实文件内容
