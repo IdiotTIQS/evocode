@@ -132,6 +132,12 @@ export function ApprovalGate({
           {/* TODO(backend): apply changes 端点；当前生成物已写入 evocode_generated/ */}
         </p>
 
+        {/* 诚实标注：拒绝不回滚磁盘文件（暂无 rollback 端点）。 */}
+        <p className="text-xs text-muted-foreground">
+          注意：拒绝仅重置会话；已写入 evocode_generated/ 的文件不会自动回滚，需手动清理。
+          {/* TODO(backend): rollback 端点 */}
+        </p>
+
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="outline"

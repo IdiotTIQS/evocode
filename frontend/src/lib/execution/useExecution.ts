@@ -60,6 +60,10 @@ export function useExecution({
 
   // 保存待批准的意图（plan gate 真实暂停期间持有，批准后才用它调后端）。
   const pendingIntentRef = useRef<string>("");
+  // 防重入锁：批准计划后到组件重渲染卸载按钮之间，快速双击会触发两次
+  // apiSubmitIntent（两次完整流水线 + 两次落盘）。此 ref 在 approvePlan 一进入
+  // 就置位，complete/fail/reset 时复位，确保 apiSubmitIntent 绝不被双击调用两次。
+  const inFlightRef = useRef(false);
   // 跟踪所有挂起的定时器，便于统一清理。
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   // 卸载标记，阻止 setState-after-unmount。
@@ -123,9 +127,22 @@ export function useExecution({
 
   // 批准计划：现在才真正执行——模拟 coding/testing/reviewing 推进，期间调用后端。
   const approvePlan = useCallback(() => {
+    // 防重入守卫：必须处于 plan gate 的合法待批准态，且无在途流水线。
+    // 双重保险：状态校验（双击第二次时已切出 waiting_approval）+ inFlightRef。
+    if (
+      inFlightRef.current ||
+      snapshot.state !== "waiting_approval" ||
+      snapshot.gate !== "plan"
+    ) {
+      return;
+    }
+
     const intent = pendingIntentRef.current;
     if (intent.length === 0) return;
 
+    // 立即上锁并切出 waiting_approval（beginCoding 会改状态），
+    // 使按钮条件不再满足，杜绝双击触发第二次 apiSubmitIntent。
+    inFlightRef.current = true;
     clearTimers();
     const codingStart = beginCoding(snapshot);
     safeSet(codingStart);
@@ -160,6 +177,7 @@ export function useExecution({
       .then((runResult) => {
         if (!mountedRef.current) return;
         if (runResult.status === "failed") {
+          inFlightRef.current = false;
           clearTimers();
           safeSetLabel(undefined);
           safeSet(fail(current, runResult.message || "运行失败"));
@@ -169,6 +187,7 @@ export function useExecution({
         // 若模拟阶段还没跑完，给最短一个延迟确保 UI 至少经过 reviewing 文案。
         const finalize = () => {
           if (!mountedRef.current) return;
+          inFlightRef.current = false;
           clearTimers();
           safeSetLabel(undefined);
           safeSet(reachDiffGate({ ...current, state: "reviewing" }, runResult));
@@ -180,6 +199,7 @@ export function useExecution({
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return;
+        inFlightRef.current = false;
         clearTimers();
         safeSetLabel(undefined);
         const detail =
@@ -193,12 +213,17 @@ export function useExecution({
   // 批准 diff → completed。应用动作当前为确认（生成物已写入 evocode_generated/）。
   // // TODO(backend): apply changes 端点；当前生成物已写入 evocode_generated/，此处为确认动作。
   const approveDiff = useCallback(() => {
+    // 防重入守卫：必须处于 diff gate 的合法待批准态。
+    if (snapshot.state !== "waiting_approval" || snapshot.gate !== "diff") {
+      return;
+    }
     clearTimers();
     safeSet(complete(snapshot));
   }, [snapshot, clearTimers, safeSet]);
 
   // 拒绝任意 gate → 回初始态。
   const reject = useCallback(() => {
+    inFlightRef.current = false;
     clearTimers();
     pendingIntentRef.current = "";
     safeSetLabel(undefined);
@@ -206,6 +231,7 @@ export function useExecution({
   }, [clearTimers, safeSet, safeSetLabel]);
 
   const reset = useCallback(() => {
+    inFlightRef.current = false;
     clearTimers();
     pendingIntentRef.current = "";
     safeSetLabel(undefined);
