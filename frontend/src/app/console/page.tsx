@@ -9,7 +9,7 @@ import { PipelineStepper } from "@/components/console/PipelineStepper";
 import { ResultTabs } from "@/components/console/ResultTabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { submitIntent } from "@/lib/api";
+import { submitIntent, ControlPlaneError } from "@/lib/api";
 import type { RunResult } from "@/types/intent";
 
 export default function ConsolePage() {
@@ -28,10 +28,15 @@ export default function ConsolePage() {
         repoPath: repoPath || undefined,
       });
       setResult(r);
-    } catch {
-      toast.error(
-        "无法连接控制平面，请确认服务已启动（control-plane:8080 与 ai-runtime:8000）"
-      );
+    } catch (err) {
+      if (err instanceof ControlPlaneError) {
+        toast.error(`控制平面返回错误（HTTP ${err.status}），请检查意图内容或服务端日志。`);
+      } else {
+        toast.error(
+          "无法连接控制平面，请确认服务已启动（control-plane:8080 与 ai-runtime:8000）。"
+        );
+      }
+      console.error("submitIntent failed", err);
     } finally {
       setLoading(false);
     }
