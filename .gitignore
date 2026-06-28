@@ -15,6 +15,11 @@ __pycache__/
 ai-runtime/data/
 # Env
 .env
+.evocode.env
+# Logs (一键脚本输出)
+.logs/
+.dev-*.log
+.demo-result.json
 # OS
 .DS_Store
 .demo-app/

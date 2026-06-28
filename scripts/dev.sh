@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# EvoCode 一键启动 — 启动 Python AI 运行时 + Spring Boot 控制平面 + 前端控制台
+# EvoCode 开发启动（简版，无健康检查/无密钥管理）。
+# 推荐改用 scripts/start.sh（有序启动 + 健康检查 + 自动 JWT 密钥）。
 # 用法: bash scripts/dev.sh          (启动全部三层)
 #       bash scripts/dev.sh setup    (首次安装依赖)
 set -euo pipefail
@@ -9,6 +10,15 @@ cd "$ROOT"
 
 PY_VENV="$ROOT/ai-runtime/.venv/Scripts/python"
 [ -f "$PY_VENV" ] || PY_VENV="$ROOT/ai-runtime/.venv/bin/python"  # macOS/Linux
+
+# 控制平面要求 EVOCODE_JWT_SECRET（缺省即启动失败）。复用 .evocode.env，没有则临时生成。
+ENV_FILE="$ROOT/.evocode.env"
+if [ -f "$ENV_FILE" ] && grep -q '^EVOCODE_JWT_SECRET=' "$ENV_FILE"; then
+  set -a; . "$ENV_FILE"; set +a
+else
+  export EVOCODE_JWT_SECRET="$(openssl rand -hex 32 2>/dev/null \
+    || python -c 'import secrets;print(secrets.token_hex(32))')"
+fi
 
 setup() {
   echo "==> [1/3] Python AI 运行时依赖 (venv 3.11)"

@@ -36,11 +36,35 @@ EvoCode is a four-layer agent-driven software engineering platform that enables 
 
 ## Local Development
 
-### Startup Order
+### One-command start (recommended)
 
-Start services in this order to ensure proper initialization. These are the exact
-commands verified end-to-end for increment 0 (Windows paths shown for the venv;
-on macOS/Linux use `.venv/bin/...`).
+The whole stack (AI Runtime :8000 → Control Plane :8080 → Frontend :3000) starts in
+dependency order, each waited on a health check, with the JWT secret generated and
+injected automatically.
+
+**Windows (PowerShell):**
+```powershell
+pwsh scripts/start.ps1 setup   # first time only: install deps (venv / npm / pnpm)
+pwsh scripts/start.ps1         # start all three; background processes + .logs/
+pwsh scripts/start.ps1 stop    # stop everything (frees :8000/:8080/:3000)
+```
+
+**macOS / Linux / Git Bash:**
+```bash
+bash scripts/start.sh setup    # first time only
+bash scripts/start.sh          # start all three; Ctrl-C stops everything
+bash scripts/start.sh stop     # stop by port
+```
+
+Then open **http://localhost:3000** and register. The **first user to register becomes
+ADMIN**; everyone after is a regular USER. See [docs/RUNNING.md](docs/RUNNING.md) for
+ports, environment variables, logs, and troubleshooting.
+
+### Manual start (if you prefer running each service yourself)
+
+Start in this order. The control plane **requires** `EVOCODE_JWT_SECRET` (a ≥32-byte
+secret) — it refuses to start without one (so a committed default key can't be used to
+forge tokens). Windows venv paths shown; on macOS/Linux use `.venv/bin/...`.
 
 1. **Python AI Runtime** (Port 8000)
    ```bash
@@ -53,7 +77,7 @@ on macOS/Linux use `.venv/bin/...`).
 2. **Spring Boot Control Plane** (Port 8080)
    ```bash
    cd control-plane
-   mvn spring-boot:run
+   EVOCODE_JWT_SECRET="$(openssl rand -hex 32)" mvn spring-boot:run
    ```
 
 3. **Frontend Console** (Port 3000)
@@ -65,47 +89,55 @@ on macOS/Linux use `.venv/bin/...`).
 
 ### Verified End-to-End Check
 
-With the Python runtime and Spring Boot control plane running, submit an intent
-through the gateway. The request is forwarded to the Python runtime, which runs a
-LangGraph `understand → plan → architect → generate → verify → review` pipeline and returns a real planned `TaskGraph`:
+All `/api/**` endpoints (except `/api/auth/**` and `/actuator/health`) require a JWT.
+Register to obtain one, then use it as a Bearer token:
 
 ```bash
-curl -X POST http://localhost:8080/api/intents \
+# 1) Register the first user (→ ADMIN) and capture the token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"intent":"add a comments api and a product page","projectId":"shop"}'
-# → {"runId":"<uuid>","status":"completed","phase":"reviewed",
-#    "taskGraph":{"tasks":[
-#      {"id":"task-1","title":"实现前端界面","kind":"frontend",...},
-#      {"id":"task-2","title":"实现后端 API","kind":"backend",...},
-#      {"id":"task-3","title":"编写测试","kind":"test",...}]},
-#    "changeSet":[{"path":"evocode_generated/...","content":"..."}],
-#    "review":{"verdict":"request_changes","findings":[...],"summary":"..."},
-#    "message":"Planned 3 task(s), generated 3 file(s) for project shop"}
+  -d '{"email":"founder@example.com","password":"password123"}' \
+  | python -c "import sys,json;print(json.load(sys.stdin)['token'])")
 
-curl http://localhost:8080/actuator/health   # → {"status":"UP"}
-curl http://localhost:8000/health            # → {"status":"ok"}
+# 2) Submit an intent. The backend runs understand → plan → architect, then
+#    INTERRUPTS before code generation and returns a real planned TaskGraph.
+#    No files are written until you approve — twice.
+curl -X POST http://localhost:8080/api/intents \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"intent":"add a comments api and a product page","projectId":"shop"}'
+# → {"runId":"<uuid>","status":"waiting_approval","gate":"plan",
+#    "taskGraph":{"tasks":[...]},"changeSet":[],"message":"...awaiting plan approval (no files written)"}
+
+# 3) Approve the plan → generates changeSet, stops at the diff gate (still no files on disk):
+curl -X POST http://localhost:8080/api/runs/<runId>/approve -H "Authorization: Bearer $TOKEN"
+# → {"status":"waiting_approval","gate":"diff","changeSet":[{"path":"evocode_generated/..."}], ...}
+
+# 4) Approve the diff → applies to disk and completes:
+curl -X POST http://localhost:8080/api/runs/<runId>/approve -H "Authorization: Bearer $TOKEN"
+# → {"status":"completed","gate":null,"phase":"applied","appliedFiles":[...], ...}
+
+curl http://localhost:8080/actuator/health   # → {"status":"UP"}  (public)
+curl http://localhost:8000/health            # → {"status":"ok"}  (runtime)
 ```
 
-#### Run history (persisted)
+For **live per-node progress**, use the SSE variants (`POST /api/runs/stream` and
+`POST /api/runs/{id}/approve/stream`) — they stream `phase` frames per pipeline node
+and a terminal `gate`/`done` frame. The frontend uses these by default and falls back
+to the plain POST endpoints if streaming is unavailable.
 
-The control plane persists every run to an embedded H2 file database
-(`control-plane/data/`), so history survives restarts. Two read endpoints expose it:
+#### Run history (persisted, owner-scoped)
+
+The control plane persists every run, project, and session to an embedded H2 file
+database (`control-plane/data/`), surviving restarts. List/get are scoped to the
+current user (ADMIN sees all); non-owners get 404.
 
 ```bash
-# 最近运行列表（最近优先，可选 ?limit=N，默认 20、上限 100）
-curl http://localhost:8080/api/runs
-# → [{"runId":"<uuid>","projectId":"demo","intent":"...","status":"completed",
-#     "phase":"reviewed","message":"...","createdAt":"2026-..Z"}, ...]
+curl http://localhost:8080/api/runs -H "Authorization: Bearer $TOKEN"
+# → [{"runId":"<uuid>","projectId":"shop","intent":"...","status":"completed", ...}]
 
-# 单次运行的完整 RunResult
-curl http://localhost:8080/api/runs/<runId>
-# → {"runId":"<uuid>","status":"completed","phase":"reviewed","taskGraph":{...},
-#    "changeSet":[...],"review":{...}, ...}
+curl http://localhost:8080/api/runs/<runId> -H "Authorization: Bearer $TOKEN"
+# → full RunResult (taskGraph / changeSet / verification / review)
 ```
-
-Persistence is a side effect of `POST /api/intents` — if the write fails the
-intent response is unaffected. These endpoints currently have **no
-authentication and are intended for localhost-only use** (auth is a later increment).
 
 
 #### With a real project knowledge graph (optional `repoPath`)
@@ -118,13 +150,13 @@ what was extracted:
 
 ```bash
 curl -X POST http://localhost:8080/api/intents \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"intent":"add a product page","projectId":"shop","repoPath":"E:/evocode/test/fixtures/next-app"}'
-# → {"runId":"<uuid>","status":"completed","phase":"reviewed",
+# → {"runId":"<uuid>","status":"waiting_approval","gate":"plan",
 #    "taskGraph":{"tasks":[{"kind":"frontend",...},{"kind":"test",...}]},
 #    "graphStats":{"fileCount":4,"componentCount":4,"importCount":2},
-#    "review":{"verdict":"approve","findings":[...],"summary":"..."},
-#    "message":"Planned 2 task(s), generated 2 file(s) for project shop"}
+#    "changeSet":[],"message":"...awaiting plan approval (no files written)"}
+# Approve twice (plan gate, then diff gate) to generate and apply against the repo.
 ```
 
 Without `repoPath` (or if Node/the extractor is unavailable), `understand` falls
@@ -169,7 +201,11 @@ The analysis distinguishes `dependencies_of` (what a file transitively imports)
 from `impact_of` (who transitively imports it — what breaks if it changes), is
 cycle-safe (a file is never its own dependency), and is fully deterministic.
 
-The pipeline now runs six nodes: **understand → plan → architect → generate → verify → review**.
+The pipeline runs seven nodes: **understand → plan → architect → generate → verify →
+review → apply**, with **two real approval gates** enforced by LangGraph interrupts:
+it pauses before `generate` (the **plan gate**) and before `apply` (the **diff gate**).
+Nothing is written to disk until the user approves both — this is enforced in the
+backend, not simulated in the UI.
 
 The **Architect** node is deterministic and graph-driven: it reads the `ProjectGraph` produced by `understand` and emits `ArchitectureNotes` for each planned task — file locations, patterns to follow, constraints, and impact warnings. No LLM call is made here; the output is purely structural.
 
@@ -189,20 +225,35 @@ control plane with HTTP 400 (bean validation).
 - Maven 3.9
 - Git
 
-### Security Note (Increment 0)
+### Security
 
-Increment 0 has **no authentication** on the control plane or the Python runtime.
-Bind both services to `localhost` only and do not expose them to a network.
-The Spring Boot control plane is the designated enterprise/auth layer —
-authentication, RBAC, and a tightened CORS policy land in a later increment
-before any non-local deployment.
+The Spring Boot control plane is the auth boundary. **All `/api/**` endpoints require a
+JWT** except `/api/auth/**` (register/login) and `/actuator/health`. Auth model:
+
+- **JWT + BCrypt**: stateless HS256 tokens; passwords hashed with BCrypt. The signing
+  key comes from `EVOCODE_JWT_SECRET` (≥32 bytes) — the service refuses to start without
+  one, so no committed default key can be used to forge tokens. The one-command scripts
+  generate and persist a per-machine secret in `.evocode.env` (git-ignored).
+- **Ownership isolation (RBAC)**: every Project / Session / Run is owned by its creator.
+  Lists are scoped to the current user; accessing another user's resource returns **404**
+  (no existence leak). The first registered user is **ADMIN** (sees everything); the rest
+  are **USER**.
+- **Still localhost-oriented**: CORS allows only `http://localhost:3000`, the AI runtime
+  (:8000) itself is unauthenticated and trusts the control plane, and the H2 file DB and
+  in-memory LangGraph checkpoints are single-node. Harden these (network policy, runtime
+  auth, durable checkpointer, secret rotation) before any non-local deployment. See
+  [docs/RUNNING.md](docs/RUNNING.md) and `docs/architecture/deployment-architecture.md`.
+
+The Planner uses a deterministic stub LLM by default (no credentials needed). Set
+`OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) to switch the
+planning node to a real prompt-driven OpenAI call.
 
 ## Cross-Layer Contracts
 
 All layers adhere to the contract definitions in the `contracts/` directory. These schemas define:
 
 - **IntentRequest**: Structure for user intents and project context
-- **RunAcknowledgement**: Response format for intent processing results
+- **RunResult**: Full result of a run (status, gate, taskGraph, changeSet, verification, review)
 
 See `contracts/README.md` for details on maintaining contract consistency across layers.
 
