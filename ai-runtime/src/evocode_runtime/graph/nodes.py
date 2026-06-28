@@ -99,13 +99,14 @@ def architect_node(state: RunState) -> dict:
 def generate_node(state: RunState) -> dict:
     """把任务物化为真实代码文件，写入目标 repo 的 evocode_generated/ 子目录。
 
-    这是 "agents modify systems" 的落地环节。无 repoPath 时仍生成 changeSet
-    （内容可见）但不落盘。绝不让 /runs 失败。"""
+    消费架构师笔记决定文件落点与模式。无 repoPath 时仍生成 changeSet（内容可见）
+    但不落盘。绝不让 /runs 失败。"""
     intent = state["intent"]
     tasks = state.get("tasks") or []
+    notes = state.get("architectureNotes") or []
     repo_path = state.get("repoPath") or ""
     try:
-        change_set = generate_change_set(tasks, intent)
+        change_set = generate_change_set(tasks, intent, notes)
     except Exception:  # noqa: BLE001
         logger.exception("generate_node failed to build change set for project %s",
                           state.get("projectId"))

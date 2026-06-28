@@ -85,8 +85,24 @@ describe("{name}", () => {{
     return path, content
 
 
-def generate_files_for_task(task: dict, intent: str) -> list[dict]:
-    """为单个任务生成文件。返回 [{path, content}]。"""
+def _patterns_comment(note: dict | None) -> str:
+    """把架构笔记的模式/约束渲染为生成文件顶部的可追溯注释。"""
+    if not note:
+        return ""
+    lines = []
+    for p in note.get("patternsToFollow", []):
+        lines.append(f"//   pattern: {p}")
+    for c in note.get("constraints", []):
+        lines.append(f"//   constraint: {c}")
+    if note.get("impactWarning"):
+        lines.append(f"//   impact: {note['impactWarning']}")
+    if not lines:
+        return ""
+    return "// EvoCode architecture notes:\n" + "\n".join(lines) + "\n"
+
+
+def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -> list[dict]:
+    """为单个任务生成文件。架构笔记存在时，优先使用其 fileLocations 与模式注释。"""
     kind = task.get("kind")
     if kind == "frontend":
         p, c = _frontend_file(task, intent)
@@ -98,14 +114,26 @@ def generate_files_for_task(task: dict, intent: str) -> list[dict]:
         name = _slug(task.get("title") or intent)
         p = f"evocode_generated/{name}.md"
         c = f"# {task.get('title')}\n\nIntent: {intent}\n\nTODO: {task.get('description', '')}\n"
+    # 架构笔记接管文件落点（仅接受 evocode_generated/ 下的安全路径）
+    primary = (note or {}).get("fileLocations", {}).get("primary")
+    if primary and primary.startswith("evocode_generated/") and ".." not in primary.split("/"):
+        p = primary
+    comment = _patterns_comment(note)
+    if comment:
+        c = comment + c
     return [{"path": p, "content": c}]
 
 
-def generate_change_set(tasks: list[dict], intent: str) -> list[dict]:
-    """为所有任务生成 ChangeSet：[{path, content}]。确定性。"""
+def generate_change_set(tasks: list[dict], intent: str,
+                        notes: list[dict] | None = None) -> list[dict]:
+    """为所有任务生成 ChangeSet：[{path, content}]。确定性。
+
+    notes（来自架构师阶段）按 taskId 匹配，决定文件落点与模式注释；缺省时退化为
+    原有模板行为，保持向后兼容。"""
+    by_task = {n.get("taskId"): n for n in (notes or [])}
     files: list[dict] = []
     for task in tasks:
-        files.extend(generate_files_for_task(task, intent))
+        files.extend(generate_files_for_task(task, intent, by_task.get(task.get("id"))))
     return files
 
 
