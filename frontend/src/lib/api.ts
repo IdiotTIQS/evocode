@@ -1,4 +1,4 @@
-import type { IntentRequest, RunResult } from "@/types/intent";
+import type { IntentRequest, RunResult, RunSummary } from "@/types/intent";
 
 const BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:8080";
 
@@ -16,6 +16,18 @@ export async function submitIntent(req: IntentRequest): Promise<RunResult> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return resp.json();
+}
+
+export async function listRuns(limit = 20): Promise<RunSummary[]> {
+  const resp = await fetch(`${BASE}/api/runs?limit=${limit}`);
+  if (!resp.ok) throw new ControlPlaneError(resp.status);
+  return resp.json();
+}
+
+export async function getRun(runId: string): Promise<RunResult> {
+  const resp = await fetch(`${BASE}/api/runs/${encodeURIComponent(runId)}`);
   if (!resp.ok) throw new ControlPlaneError(resp.status);
   return resp.json();
 }

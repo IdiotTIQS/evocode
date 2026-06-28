@@ -71,3 +71,13 @@ export interface RunResult {
   review?: ReviewOutput;
   message: string;
 }
+
+export interface RunSummary {
+  runId: string;
+  projectId: string;
+  intent: string;
+  status: string;
+  phase: string;
+  message: string;
+  createdAt: string; // ISO-8601
+}
