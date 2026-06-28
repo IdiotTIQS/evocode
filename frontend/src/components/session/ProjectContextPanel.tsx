@@ -1,7 +1,7 @@
 "use client";
 // frontend/src/components/session/ProjectContextPanel.tsx
 // 右栏：项目上下文（项目名 / repoPath / createdAt；latestResult 若有 graphStats 显示文件/组件/import 数）
-// + "Agent 活动"占位区（诚实标"计划中（backend SSE 落地后接入）"）。
+// + "Agent 活动"区（实时进度已由 SSE 驱动中栏流水线；此侧栏汇总视图待后续增量）。
 import { FolderGit2 } from "lucide-react";
 
 import type { Project, RunResult } from "@/types/domain";
@@ -97,10 +97,10 @@ export function ProjectContextPanel({
         <h3 className="mb-2 text-xs font-medium text-muted-foreground">
           Agent 活动
         </h3>
-        {/* 诚实占位：实时活动流尚未接入，等待 backend SSE。 */}
+        {/* 实时进度已通过 SSE 驱动中栏流水线/阶段文案；此侧栏镜像为后续增量。 */}
         <div className="rounded-md border border-dashed px-3 py-4 text-center">
           <p className="text-xs text-muted-foreground">
-            活动流：计划中（backend SSE 落地后接入）
+            实时进度见中栏流水线（SSE 逐节点推送）；此处汇总视图待后续增量。
           </p>
         </div>
       </div>

@@ -6,7 +6,7 @@
 > - ✅ **已构建（UI + 路由）**：多路由 Agent Workspace —— Dashboard、Projects 列表、Project Tabs（Overview / Sessions / Runs / Graph / Settings）、Session 三栏工作区（左会话史 / 中交互 / 右上下文）、Run 详情页、审批门（Approval Gate）。技术栈：Next.js 15.5.x（App Router，含 `(workspace)` 路由组与 Server Component 重定向）、React 19、TypeScript（strict）、Tailwind CSS、pnpm。
 > - ✅ **真实后端 — 两段式审批门**：意图提交后后端**真实中断**于代码生成前，需人工批准两次才落盘 —— `POST /api/intents`（`submitIntent`，跑 understand→plan→architect 后停在 plan gate，返回 `status=waiting_approval`/`gate=plan` + 真实 TaskGraph，磁盘零写入）、`POST /api/runs/{id}/approve`（`approveRun`，第一次 resume 越过 generate 门生成 changeSet 停在 diff gate 仍不落盘；第二次 resume 越过 apply 门落盘并 completed）、`GET /api/runs/{id}`（`getRun`）。底层为 LangGraph `interrupt_before=["generate","apply"]` + checkpointer。所有审批暂停均为**后端真实状态**，兑现「绝不在提交意图后立即执行代码变更」。
 > - 🟡 **客户端本地持久化（localStorage，待后端）**：Project 与 Session 实体及其消息历史保存在浏览器 `localStorage`（`src/lib/stores/`，含 `typeof window` SSR 守卫）。刷新保留，但不跨设备、无后端 CRUD。`// TODO(backend)`：接入 Project/Session API 后只换 store 适配器。
-> - 🟡 **阶段进度文案（待 SSE 细化）**：planning/coding/reviewing 的文案由真实请求的「在途/完成」驱动（非定时器模拟），但仍是单次 approve 往返粒度，非逐节点实时推送。`// TODO(backend)`：接入逐节点 SSE 流后细化为实时阶段事件。另：待批准 checkpoint 当前由运行时 MemorySaver 持有（进程重启丢失），`// TODO(backend)`：换持久化 checkpointer。
+> - ✅ **逐节点 SSE 实时进度**：提交意图与批准均优先走 SSE 流式端点（`POST /api/runs/stream`、`POST /api/runs/{id}/approve/stream`），后端用 LangGraph `stream(stream_mode="updates")` 逐节点（understand→plan→architect→generate→verify→review→apply）推送 `phase` 事件，到审批门/完成时推 `gate`/`done` 终帧（携带完整 RunResult）。前端 `src/lib/api.ts` 用 fetch+ReadableStream 消费，`useExecution` 据此实时更新阶段文案；**SSE 失败时自动回退**到非流式 POST 路径（`/api/intents`、`/api/runs/{id}/approve`，逻辑不变）。SSE 不改变中断/落盘语义——批准前磁盘仍零写入。粒度为节点级（非 LLM 逐 token）。`// TODO(backend)`：待批准 checkpoint 当前由运行时 MemorySaver 持有（进程重启丢失），换持久化 checkpointer 为独立增量。
 > - 📋 **计划中**：知识图谱可视化（Project Graph，目前为占位页）、多租户 Org（类型已留位，当前隐式单租户）。
 
 ## Overview
@@ -136,14 +136,15 @@ src/
 
 ## Communication with the Control Plane
 
-> **实现状态**：`POST /api/intents`（提交意图，跑到 plan gate 真实中断）、`POST /api/runs/{id}/approve`（批准当前门并 resume）、`GET /api/runs/{id}`（拉取运行状态/结果）**真实可用**。下方 `/stream`（SSE）、`/reject`、`/api/projects/{id}/graph` 为 📋 计划中——后端对应端点尚未实现；当前「拒绝」在前端重置会话（后端批准前未落盘，无需回滚），阶段进度为单次 approve 往返粒度（见顶部实现状态横幅）。
+> **实现状态**：`POST /api/intents`、`POST /api/runs/{id}/approve`、`GET /api/runs/{id}`、以及 SSE 流式 `POST /api/runs/stream` 与 `POST /api/runs/{id}/approve/stream`（逐节点实时进度，控制平面用 `SseEmitter` 透传运行时流）**真实可用**。前端默认走 SSE，失败回退非流式 POST。下方 `/reject`、`/api/projects/{id}/graph` 为 📋 计划中；当前「拒绝」在前端重置会话（后端批准前未落盘，无需回滚）。
 
 The frontend communicates with the Spring Boot Control Plane exclusively. It never calls the AI Runtime or Business Services directly.
 
 **POST /api/intents** — submit an intent; backend runs understand→plan→architect then interrupts before code generation, returning `waiting_approval`/`gate=plan` + the TaskGraph (no files written) ✅  
+**POST /api/runs/stream** — same as /api/intents but streams per-node progress as SSE (`run`/`phase`/`gate` frames), stopping at the plan gate ✅  
 **POST /api/runs/{id}/approve** — approve the current gate and resume: plan gate → generates changeSet, stops at diff gate (still no files written); diff gate → applies to disk and completes ✅  
+**POST /api/runs/{id}/approve/stream** — same as approve but streams per-node progress as SSE, terminal frame `gate`(diff) or `done`(completed) ✅  
 **GET /api/runs/{id}** — poll run status and results ✅  
-**GET /api/runs/{id}/stream** — Server-Sent Events stream for live agent activity 📋  
 **POST /api/runs/{id}/reject** — reject with feedback 📋  
 **GET /api/projects/{id}/graph** — fetch the knowledge graph for visualization 📋  
 

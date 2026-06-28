@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterator
 from uuid import uuid4
 from evocode_runtime.graph import build_graph
 from evocode_runtime.models import (
@@ -9,6 +10,17 @@ from evocode_runtime.models import (
 logger = logging.getLogger(__name__)
 
 _graph = build_graph()
+
+# 节点 → 面向用户的阶段文案（供 SSE phase 事件携带，前端可直接展示）。
+_NODE_LABELS = {
+    "understand": "正在理解项目结构与上下文",
+    "plan": "正在规划工程任务",
+    "architect": "正在设计架构与文件落点",
+    "generate": "正在生成代码变更",
+    "verify": "正在运行类型检查与验证",
+    "review": "正在进行代码审查",
+    "apply": "正在写入文件（evocode_generated/）",
+}
 
 
 class RunService:
@@ -60,6 +72,72 @@ class RunService:
         except Exception:  # noqa: BLE001
             logger.exception("run %s resume failed", run_id)
             return self._failed(run_id)
+
+    # --- 流式（SSE）---
+
+    def plan_stream(self, intent: str, project_id: str, repo_path: str = "") -> Iterator[dict]:
+        """提交意图，逐节点流式产出进度事件，最终停在 plan gate。
+
+        产出事件（dict）：
+          {type:"run", runId}                      首帧，告知 run_id（resume 用）
+          {type:"phase", node, phase, label}       每个节点完成
+          {type:"gate"|"done"|"failed", result}    终帧，result 为 RunResult 的 dict
+        与 plan() 共享同一图与中断语义：批准前磁盘零写入。
+        """
+        run_id = str(uuid4())
+        config = {"configurable": {"thread_id": run_id}}
+        yield {"type": "run", "runId": run_id}
+        inp = {"intent": intent, "projectId": project_id, "repoPath": repo_path,
+               "context": {}, "phase": "", "tasks": [],
+               "changeSet": [], "applied": [], "verification": {}}
+        yield from self._stream_segment(run_id, project_id, config, inp)
+
+    def resume_stream(self, run_id: str) -> Iterator[dict]:
+        """批准后流式续跑，逐节点产出进度，停在下一个门或完成。
+
+        run_id 无 checkpoint 时产出单个 {type:"notfound"} 事件（调用方映射 404）。
+        """
+        config = {"configurable": {"thread_id": run_id}}
+        try:
+            snapshot = _graph.get_state(config)
+        except Exception:  # noqa: BLE001
+            logger.exception("run %s get_state failed (stream)", run_id)
+            yield {"type": "notfound"}
+            return
+        if not snapshot.created_at:
+            yield {"type": "notfound"}
+            return
+        project_id = snapshot.values.get("projectId", "")
+        yield {"type": "run", "runId": run_id}
+        # 已完成：幂等产出终帧。
+        if not snapshot.next:
+            yield self._terminal_event(run_id, project_id, snapshot)
+            return
+        yield from self._stream_segment(run_id, project_id, config, None)
+
+    def _stream_segment(self, run_id: str, project_id: str, config: dict,
+                        graph_input) -> Iterator[dict]:
+        """跑一段图流，逐节点 yield phase 事件，段末 yield 终帧。"""
+        try:
+            for chunk in _graph.stream(graph_input, config=config, stream_mode="updates"):
+                for node, upd in chunk.items():
+                    if node == "__interrupt__":
+                        continue
+                    phase = (upd or {}).get("phase")
+                    yield {"type": "phase", "node": node, "phase": phase,
+                           "label": _NODE_LABELS.get(node, node)}
+            yield self._terminal_event(run_id, project_id, _graph.get_state(config))
+        except Exception:  # noqa: BLE001
+            logger.exception("run %s stream segment failed", run_id)
+            yield {"type": "failed",
+                   "result": self._failed(run_id).model_dump(by_alias=True)}
+
+    def _terminal_event(self, run_id: str, project_id: str, snapshot) -> dict:
+        """依 checkpoint 状态产出 gate/done 终帧（携带完整 RunResult）。"""
+        result = self._result_from_state(run_id, project_id, snapshot)
+        event_type = "done" if result.status == "completed" else (
+            "failed" if result.status == "failed" else "gate")
+        return {"type": event_type, "result": result.model_dump(by_alias=True)}
 
     # --- 内部 ---
 
