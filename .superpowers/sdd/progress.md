@@ -41,3 +41,14 @@
 - Task 4: 前端契约镜像 + API 封装 — complete (commit 41452a4, 规范✅质量approved 零发现；RunSummary 7 字段镜像 Java, listRuns/getRun 复用 BASE+ControlPlaneError+encodeURIComponent)。
 - Task 5: 控制台历史区 + 详情载入 — complete (commit e7c8c6e, 规范✅质量approved；useEffect active 防竞态, 三态, 稳定 runId key, truncate, 失败兜底不崩). Minor: status Badge 对运行中状态会显红(后端仅 completed/failed 暂无影响)、列表项省略 projectId/时间、未用 ScrollArea。
 - Task 6: 端到端验证 + 文档 — complete (commit 含文档更新；端到端实测闭环跑通: POST 意图→reviewed→GET /api/runs 最近优先→GET /api/runs/{id} 完整 RunResult; 清理了测试污染的文件库; 7/7 Java 测试过; 前端 build 过)。
+
+## Agent Workspace 前端迁移（plan: docs/superpowers/plans/2026-06-28-agent-workspace-migration.md）
+基线 BASE=d2b414b。诚实边界：Project/Session 用 localStorage 适配器(TODO backend)，审批门/流式为客户端模拟。
+- Task 1: 领域类型 + Project/Session 本地数据源适配器 — complete (commits b2e155f..e19c41f, 规范✅质量approved；ExecutionState 8 态, storage SSR 守卫, store 标 TODO(backend). Fix wave1: newId() 守卫 crypto.randomUUID 统一 SSR 安全)。
+- Task 2: Workspace 外壳 + 全局导航 + 路由骨架 — complete (commit 830fd6e, 规范✅质量approved；next/link active 前缀匹配, 单一 main, 路由组 (workspace), 三占位页生成, 落地页/console 未回退). Minor: 移动端侧栏偏纵向堆叠非横向条、header 空占位条(可延后)。
+- Task 3: Dashboard — complete (commits 1c6c80e + Link 修复, 规范✅质量approved；StatCard/RecentList, 三类数据 listProjects/listSessions/listRuns 容错, 静态流水线健康诚实标注, 空态引导. 修: 空态 <a>→Link)。
+- Task 4: Projects 列表 + Project 详情 Tabs — complete (commit 2318d6f, 规范✅质量approved；列表+内联新建+5 Tab, Next15 params 正确(server await/client useParams), 项目不存在友好降级, runs 容错 filter, 删除两步确认, updateProject 加且标 TODO(backend), 8/8 页). Minor: overview 硬编码项目计数=1、加载占位空格(cosmetic)。
+- Task 5: Run 详情页 /runs/[runId] — complete (commit 40210d7, 规范✅质量approved；useParams, getRun, 四态 loading/notfound(404)/failed(重试)/result, 复用 PipelineStepper+ResultTabs 零重写, 竞态防护). Minor: 标题与 Tab 内 Badge 轻微重复(cosmetic)。
+- Task 6: Session Workspace 三栏布局（最重要）— complete (commit 0b45eb1 + 死prop修, 规范✅质量approved；三栏响应式中栏始终在/左<lg/右<xl, 精简意图输入, appendMessage→submitIntent→result 链 /runs, 诚实标记右栏活动计划中+直接submitIntent标 TODO(T7), 会话不存在降级). Minor: 会话列表不即时重排、React 隐式 import。
+- Task 7: 审批门状态机 + 执行进度流模拟 — complete (commits 4b8413b..b8e7f52, 规范✅; 产品约束达成: submitIntent 仅在 approvePlan 后调用(无 Critical); 状态机/定时器清理/PipelineStepper 向后兼容/诚实标记齐全. Fix wave1: 防重入 inFlightRef+状态守卫(防双击两次流水线落盘) + diff 拒绝不回滚诚实标注). Minor: 无超时 AbortController、reset 死API、failed→planned 死分支。
+- Task 8: /console 收口 + 架构文档 — complete (commits e84bee2..f0b2c66, 规范✅质量approved；/console→redirect /dashboard, 落地页链接改 /dashboard, 架构文档诚实分层更新, 删孤儿 ConsoleShell/Sidebar). reviewer Important(commit 一致性)为环境误报已核实。
