@@ -116,8 +116,11 @@ def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -
         c = f"# {task.get('title')}\n\nIntent: {intent}\n\nTODO: {task.get('description', '')}\n"
     # 架构笔记接管文件落点（仅接受 evocode_generated/ 下的安全路径）
     primary = (note or {}).get("fileLocations", {}).get("primary")
-    if primary and primary.startswith("evocode_generated/") and ".." not in primary.split("/"):
-        p = primary
+    if primary:
+        primary_norm = primary.replace("\\", "/")
+        # 安全：规范化反斜杠后，要求落在 evocode_generated/ 下且无 .. 段（兼容 Windows 路径）
+        if primary_norm.startswith("evocode_generated/") and ".." not in primary_norm.split("/"):
+            p = primary_norm
     comment = _patterns_comment(note)
     if comment:
         c = comment + c
@@ -142,8 +145,8 @@ def apply_change_set(repo_path: str, files: list[dict]) -> list[str]:
     仅写入 repo_path/evocode_generated/ 下，绝不覆盖 repo 既有文件。"""
     written: list[str] = []
     for f in files:
-        rel = f["path"]
-        # 安全：拒绝路径穿越，强制落在 evocode_generated/ 下
+        rel = f["path"].replace("\\", "/")
+        # 安全：规范化反斜杠后拒绝路径穿越，强制落在 evocode_generated/ 下（兼容 Windows）
         if ".." in rel.split("/") or not rel.startswith("evocode_generated/"):
             continue
         abs_path = os.path.join(repo_path, rel)
