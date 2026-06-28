@@ -3,7 +3,7 @@
 // 概览：项目元信息（名称/仓库路径/创建时间）+ 会话数、运行数计数。
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { FolderGit2, MessagesSquare, Play } from "lucide-react";
+import { MessagesSquare, Play } from "lucide-react";
 import { getProject } from "@/lib/stores/projectStore";
 import { listSessions } from "@/lib/stores/sessionStore";
 import { listRuns } from "@/lib/api";
@@ -91,19 +91,7 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-3">
-            <FolderGit2
-              className="size-5 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="text-2xl font-semibold tabular-nums">1</p>
-              <p className="text-xs text-muted-foreground">项目</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardContent className="flex items-center gap-3">
             <MessagesSquare

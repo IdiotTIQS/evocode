@@ -143,9 +143,9 @@ export interface StepperMapping {
  * - planning → "planned"（规划在途）
  * - plan gate → "planned"（停在规划节点等批准）
  * - coding → "generated"（生成在途）
- * - diff gate → "reviewed"（生成+验证+审查已完成，等批准落盘）
- * - reviewing → "reviewed"（落盘在途）
- * - completed → done=true（全亮）
+ * - diff gate → "reviewed"（生成+验证+审查已完成，等批准落盘——apply 待执行）
+ * - reviewing → "applied"（批准 diff 后落盘在途，高亮 apply 节点）
+ * - completed → done=true（全亮，含 apply）
  * - failed / queued → 沿用最近阶段或起点
  */
 export function mapStateToStepper(
@@ -166,9 +166,9 @@ export function mapStateToStepper(
     case "testing":
       return { phase: "verified", done: false };
     case "reviewing":
-      return { phase: "reviewed", done: false };
+      return { phase: "applied", done: false };
     case "completed":
-      return { phase: "reviewed", done: true };
+      return { phase: "applied", done: true };
     case "failed":
       return { phase: "planned", done: false };
   }

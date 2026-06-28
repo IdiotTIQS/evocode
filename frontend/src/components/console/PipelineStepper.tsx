@@ -9,6 +9,7 @@ const PHASE_ORDER = [
   "generate",
   "verify",
   "review",
+  "apply",
 ] as const;
 
 const PHASE_TO_INDEX: Record<string, number> = {
@@ -18,6 +19,7 @@ const PHASE_TO_INDEX: Record<string, number> = {
   generated: 3,
   verified: 4,
   reviewed: 5,
+  applied: 6,
 };
 
 const PHASE_LABEL: Record<(typeof PHASE_ORDER)[number], string> = {
@@ -27,6 +29,7 @@ const PHASE_LABEL: Record<(typeof PHASE_ORDER)[number], string> = {
   generate: "生成",
   verify: "验证",
   review: "审查",
+  apply: "应用",
 };
 
 export function PipelineStepper({

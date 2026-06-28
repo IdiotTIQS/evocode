@@ -1,6 +1,7 @@
 "use client";
 // frontend/src/app/(workspace)/dashboard/page.tsx
 // 仪表盘：顶部统计行 + 最近项目/会话/运行 + Agent 健康（流水线节点，静态诚实展示）。
+// Agent 健康为七节点流水线的静态结构展示，不反映实时健康。
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -18,7 +19,7 @@ import { RecentList } from "@/components/workspace/RecentList";
 import type { RecentListItem } from "@/components/workspace/RecentList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// 六节点流水线（确定性，本地可运行）。诚实静态展示，不伪造实时健康数据。
+// 七节点流水线（确定性，本地可运行）。诚实静态展示，不伪造实时健康数据。
 const PIPELINE_NODES: { key: string; label: string }[] = [
   { key: "understand", label: "理解 understand" },
   { key: "plan", label: "规划 plan" },
@@ -26,6 +27,7 @@ const PIPELINE_NODES: { key: string; label: string }[] = [
   { key: "generate", label: "生成 generate" },
   { key: "verify", label: "验证 verify" },
   { key: "review", label: "评审 review" },
+  { key: "apply", label: "应用 apply" },
 ];
 
 function fmtTime(iso: string): string {
