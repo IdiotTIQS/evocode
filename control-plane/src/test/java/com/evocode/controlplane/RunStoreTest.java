@@ -29,7 +29,7 @@ class RunStoreTest {
 
     @Test
     void save_then_get_roundtrips_full_result() {
-        var req = new IntentRequest("加联系页", "demo", null, null);
+        var req = new IntentRequest("加联系页", "demo", null, null, null, null);
         store.save(req, sampleResult("run-rt-1"), "owner-1");
 
         Optional<RunResult> got = store.get("run-rt-1");
@@ -42,8 +42,8 @@ class RunStoreTest {
 
     @Test
     void list_returns_recent_first_with_summary_fields() {
-        store.save(new IntentRequest("意图A", "projA", null, null), sampleResult("run-list-a"), "owner-1");
-        store.save(new IntentRequest("意图B", "projB", null, null), sampleResult("run-list-b"), "owner-1");
+        store.save(new IntentRequest("意图A", "projA", null, null, null, null), sampleResult("run-list-a"), "owner-1");
+        store.save(new IntentRequest("意图B", "projB", null, null, null, null), sampleResult("run-list-b"), "owner-1");
 
         List<RunSummary> runs = store.list(10);
         assertTrue(runs.size() >= 2);
@@ -62,8 +62,8 @@ class RunStoreTest {
 
     @Test
     void list_by_owner_only_returns_that_owners_runs() {
-        store.save(new IntentRequest("A 的", "p", null, null), sampleResult("run-owner-a"), "owner-a");
-        store.save(new IntentRequest("B 的", "p", null, null), sampleResult("run-owner-b"), "owner-b");
+        store.save(new IntentRequest("A 的", "p", null, null, null, null), sampleResult("run-owner-a"), "owner-a");
+        store.save(new IntentRequest("B 的", "p", null, null, null, null), sampleResult("run-owner-b"), "owner-b");
 
         List<RunSummary> aRuns = store.listByOwner("owner-a", 10);
         assertTrue(aRuns.stream().anyMatch(r -> r.runId().equals("run-owner-a")));
@@ -72,9 +72,9 @@ class RunStoreTest {
 
     @Test
     void list_by_session_scopes_to_that_session() {
-        store.save(new IntentRequest("会话 S1", "p", null, "sess-1"), sampleResult("run-s1-a"), "owner-x");
-        store.save(new IntentRequest("会话 S1", "p", null, "sess-1"), sampleResult("run-s1-b"), "owner-x");
-        store.save(new IntentRequest("会话 S2", "p", null, "sess-2"), sampleResult("run-s2-a"), "owner-x");
+        store.save(new IntentRequest("会话 S1", "p", null, "sess-1", null, null), sampleResult("run-s1-a"), "owner-x");
+        store.save(new IntentRequest("会话 S1", "p", null, "sess-1", null, null), sampleResult("run-s1-b"), "owner-x");
+        store.save(new IntentRequest("会话 S2", "p", null, "sess-2", null, null), sampleResult("run-s2-a"), "owner-x");
 
         List<RunSummary> s1 = store.listByOwnerAndSession("owner-x", "sess-1", 10);
         assertEquals(2, s1.size());

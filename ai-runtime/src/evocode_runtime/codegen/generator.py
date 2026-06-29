@@ -101,11 +101,15 @@ def _patterns_comment(note: dict | None) -> str:
     return "// EvoCode architecture notes:\n" + "\n".join(lines) + "\n"
 
 
-def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -> list[dict]:
+def generate_files_for_task(task: dict, intent: str, note: dict | None = None,
+                            history: list | None = None,
+                            prior: list | None = None) -> list[dict]:
     """为单个任务生成文件。架构笔记存在时，优先使用其 fileLocations 与模式注释。
 
     内容优先用 LLM（gateway.generate_code）真实生成；provider 不支持或失败时回退
-    到确定性模板，保证 generate 阶段绝不失败。文件落点（path）始终由模板/架构笔记决定。"""
+    到确定性模板，保证 generate 阶段绝不失败。文件落点（path）始终由模板/架构笔记决定。
+    history（对话历史）与 prior（本会话已有文件）作为上下文传给 LLM，支持多轮接续与
+    迭代编辑——若目标 path 已在 prior 中，LLM 会在其内容基础上改写。"""
     kind = task.get("kind")
     if kind == "frontend":
         p, c = _frontend_file(task, intent)
@@ -124,8 +128,10 @@ def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -
         # 安全：规范化反斜杠后，要求落在 evocode_generated/ 下且无 .. 段（兼容 Windows 路径）
         if primary_norm.startswith("evocode_generated/") and ".." not in primary_norm.split("/"):
             p = primary_norm
-    # 内容：优先 LLM 真实生成，失败回退上面的模板 c。
-    llm_code = _try_llm_code(task, intent, note)
+    # 迭代编辑：若该 path 已有上一轮内容，作为基线传给 LLM。
+    existing = next((f.get("content") for f in (prior or []) if f.get("path") == p), None)
+    # 内容：优先 LLM 真实生成（带对话历史 + 现有文件基线），失败回退上面的模板 c。
+    llm_code = _try_llm_code(task, intent, note, history, existing)
     if llm_code:
         return [{"path": p, "content": llm_code}]
     comment = _patterns_comment(note)
@@ -134,25 +140,30 @@ def generate_files_for_task(task: dict, intent: str, note: dict | None = None) -
     return [{"path": p, "content": c}]
 
 
-def _try_llm_code(task: dict, intent: str, note: dict | None) -> str | None:
+def _try_llm_code(task: dict, intent: str, note: dict | None,
+                  history: list | None, existing: str | None) -> str | None:
     """尝试用 LLM 网关生成代码；任何情况（stub / 失败 / 导入问题）都安全返回 None。"""
     try:
         from evocode_runtime.llm import get_llm_gateway
-        return get_llm_gateway().generate_code(task, intent, note)
+        return get_llm_gateway().generate_code(
+            task, intent, note, history=history or [], existing=existing)
     except Exception:  # noqa: BLE001  绝不让 codegen 因 LLM 而失败
         return None
 
 
 def generate_change_set(tasks: list[dict], intent: str,
-                        notes: list[dict] | None = None) -> list[dict]:
-    """为所有任务生成 ChangeSet：[{path, content}]。确定性。
+                        notes: list[dict] | None = None,
+                        history: list | None = None,
+                        prior: list | None = None) -> list[dict]:
+    """为所有任务生成 ChangeSet：[{path, content}]。
 
-    notes（来自架构师阶段）按 taskId 匹配，决定文件落点与模式注释；缺省时退化为
-    原有模板行为，保持向后兼容。"""
+    notes（来自架构师阶段）按 taskId 匹配，决定文件落点与模式注释；history/prior 为
+    多轮对话上下文与已有文件基线，透传给逐任务生成以支持接续对话与迭代编辑。"""
     by_task = {n.get("taskId"): n for n in (notes or [])}
     files: list[dict] = []
     for task in tasks:
-        files.extend(generate_files_for_task(task, intent, by_task.get(task.get("id"))))
+        files.extend(generate_files_for_task(
+            task, intent, by_task.get(task.get("id")), history=history, prior=prior))
     return files
 
 

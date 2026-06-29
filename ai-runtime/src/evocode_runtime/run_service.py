@@ -34,20 +34,28 @@ class RunService:
     checkpoint 按 thread_id=run_id 由图的 MemorySaver 持有，故 resume 不需重传意图。
     """
 
-    def plan(self, intent: str, project_id: str, repo_path: str = "") -> RunResult:
-        """提交意图：跑 understand→plan→architect，停在 generate 前（plan gate）。"""
+    def plan(self, intent: str, project_id: str, repo_path: str = "",
+             history: list | None = None, prior_change_set: list | None = None) -> RunResult:
+        """提交意图：跑 understand→plan→architect，停在 generate 前（plan gate）。
+
+        history / prior_change_set：多轮对话上下文与本会话已有文件（迭代编辑基线）。"""
         run_id = str(uuid4())
         config = {"configurable": {"thread_id": run_id}}
         try:
             _graph.invoke(
-                {"intent": intent, "projectId": project_id, "repoPath": repo_path,
-                 "context": {}, "phase": "", "tasks": [],
-                 "changeSet": [], "applied": [], "verification": {}},
+                self._initial_state(intent, project_id, repo_path, history, prior_change_set),
                 config=config)
             return self._result_from_state(run_id, project_id, _graph.get_state(config))
         except Exception:  # noqa: BLE001
             logger.exception("run %s plan failed", run_id)
             return self._failed(run_id)
+
+    @staticmethod
+    def _initial_state(intent, project_id, repo_path, history, prior_change_set) -> dict:
+        return {"intent": intent, "projectId": project_id, "repoPath": repo_path,
+                "history": history or [], "priorChangeSet": prior_change_set or [],
+                "context": {}, "phase": "", "tasks": [],
+                "changeSet": [], "applied": [], "verification": {}}
 
     def resume(self, run_id: str) -> RunResult | None:
         """批准后续跑：从 checkpoint 越过当前门，到下一个门或完成。
@@ -75,7 +83,9 @@ class RunService:
 
     # --- 流式（SSE）---
 
-    def plan_stream(self, intent: str, project_id: str, repo_path: str = "") -> Iterator[dict]:
+    def plan_stream(self, intent: str, project_id: str, repo_path: str = "",
+                    history: list | None = None,
+                    prior_change_set: list | None = None) -> Iterator[dict]:
         """提交意图，逐节点流式产出进度事件，最终停在 plan gate。
 
         产出事件（dict）：
@@ -83,13 +93,12 @@ class RunService:
           {type:"phase", node, phase, label}       每个节点完成
           {type:"gate"|"done"|"failed", result}    终帧，result 为 RunResult 的 dict
         与 plan() 共享同一图与中断语义：批准前磁盘零写入。
+        history / prior_change_set：多轮对话上下文与已有文件。
         """
         run_id = str(uuid4())
         config = {"configurable": {"thread_id": run_id}}
         yield {"type": "run", "runId": run_id}
-        inp = {"intent": intent, "projectId": project_id, "repoPath": repo_path,
-               "context": {}, "phase": "", "tasks": [],
-               "changeSet": [], "applied": [], "verification": {}}
+        inp = self._initial_state(intent, project_id, repo_path, history, prior_change_set)
         yield from self._stream_segment(run_id, project_id, config, inp)
 
     def resume_stream(self, run_id: str) -> Iterator[dict]:

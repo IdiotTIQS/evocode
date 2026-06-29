@@ -116,3 +116,46 @@ def test_generate_code_too_short_returns_none(monkeypatch):
     out = OpenAiLlmProvider().generate_code(
         {"id": "t", "title": "X", "kind": "frontend", "description": "d"}, "i", None)
     assert out is None
+
+
+def test_plan_injects_conversation_history(monkeypatch):
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["messages"] = json["messages"]
+        return _FakeResponse(_chat_payload(
+            '[{"id":"task-1","title":"t","kind":"frontend","description":"d"}]'))
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    OpenAiLlmProvider().plan("再加个手机号字段", {}, history=[
+        {"role": "user", "text": "加个联系表单"},
+        {"role": "agent", "text": "已生成 ContactForm"},
+    ])
+    roles = [m["role"] for m in captured["messages"]]
+    # system + 2 历史轮（user/assistant）+ 当前 user
+    assert roles == ["system", "user", "assistant", "user"]
+    assert "加个联系表单" in captured["messages"][1]["content"]
+
+
+def test_generate_code_with_existing_asks_for_edit(monkeypatch):
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["messages"] = json["messages"]
+        return _FakeResponse(_chat_payload("export const Updated = 1;\n"))
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    out = OpenAiLlmProvider().generate_code(
+        {"id": "t", "title": "X", "kind": "frontend", "description": "加手机号"},
+        "加手机号字段", None,
+        history=[{"role": "user", "text": "上一轮：做了表单"}],
+        existing="export const Form = () => null;")
+    assert out is not None
+    user_msg = captured["messages"][-1]["content"]
+    # 含现有文件内容 + 要求改完整文件
+    assert "export const Form" in user_msg
+    assert "完整文件" in user_msg
+    # 历史也被注入
+    assert any("上一轮" in m["content"] for m in captured["messages"])

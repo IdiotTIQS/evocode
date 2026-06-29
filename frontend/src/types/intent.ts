@@ -1,9 +1,16 @@
 // 镜像 contracts/intent.schema.json
+export interface ConversationTurn {
+  role: "user" | "agent";
+  text: string;
+}
+
 export interface IntentRequest {
   intent: string;
   projectId: string;
   repoPath?: string;
   sessionId?: string;  // 会话工作区提交时带上，关联 run 与 session
+  history?: ConversationTurn[];     // 本会话多轮对话历史（接续上下文）
+  priorChangeSet?: ChangeFile[];    // 本会话已生成文件（迭代编辑基线）
 }
 
 export type TaskKind = "frontend" | "backend" | "test" | "generic";

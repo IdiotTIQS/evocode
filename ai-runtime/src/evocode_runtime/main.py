@@ -18,7 +18,16 @@ def health() -> dict[str, str]:
 @app.post("/runs", response_model=RunResult, response_model_by_alias=True)
 def create_run(req: IntentRequest) -> RunResult:
     """提交意图：跑到 plan gate 即真实中断，返回 waiting_approval（磁盘零写入）。"""
-    return _run_service.plan(req.intent, req.project_id, req.repo_path or "")
+    return _run_service.plan(req.intent, req.project_id, req.repo_path or "",
+                             _history(req), _prior(req))
+
+
+def _history(req: IntentRequest) -> list:
+    return [{"role": t.role, "text": t.text} for t in (req.history or [])]
+
+
+def _prior(req: IntentRequest) -> list:
+    return [{"path": f.path, "content": f.content} for f in (req.prior_change_set or [])]
 
 
 @app.post("/runs/{run_id}/resume", response_model=RunResult, response_model_by_alias=True)
@@ -48,7 +57,8 @@ _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 def create_run_stream(req: IntentRequest) -> StreamingResponse:
     """提交意图，逐节点流式推进度，停在 plan gate。"""
     return StreamingResponse(
-        _sse(_run_service.plan_stream(req.intent, req.project_id, req.repo_path or "")),
+        _sse(_run_service.plan_stream(req.intent, req.project_id, req.repo_path or "",
+                                      _history(req), _prior(req))),
         media_type="text/event-stream", headers=_SSE_HEADERS)
 
 

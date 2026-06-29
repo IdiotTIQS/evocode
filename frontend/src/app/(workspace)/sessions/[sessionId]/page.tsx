@@ -121,13 +121,14 @@ export default function SessionWorkspacePage() {
       <SessionConversation
         className="hidden w-64 shrink-0 lg:flex lg:max-h-[calc(100vh-8rem)]"
         projectId={session.projectId}
-        messages={messages}
         activeSessionId={session.id}
       />
       <SessionCenter
         className="flex-1 min-w-0"
         session={session}
         projectId={session.projectId}
+        messages={messages}
+        latestResult={latestResult}
         {...(project?.repoPath !== undefined
           ? { repoPath: project.repoPath }
           : {})}

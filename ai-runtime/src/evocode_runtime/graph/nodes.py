@@ -79,7 +79,8 @@ def understand_node(state: RunState) -> dict:
 
 def plan_node(state: RunState) -> dict:
     gateway = get_llm_gateway()
-    tasks = gateway.plan(state["intent"], state.get("context") or {})
+    tasks = gateway.plan(state["intent"], state.get("context") or {},
+                         history=state.get("history") or [])
     return {"tasks": [t.model_dump() for t in tasks], "phase": "planned"}
 
 
@@ -105,8 +106,10 @@ def generate_node(state: RunState) -> dict:
     intent = state["intent"]
     tasks = state.get("tasks") or []
     notes = state.get("architectureNotes") or []
+    history = state.get("history") or []
+    prior = state.get("priorChangeSet") or []
     try:
-        change_set = generate_change_set(tasks, intent, notes)
+        change_set = generate_change_set(tasks, intent, notes, history=history, prior=prior)
     except Exception:  # noqa: BLE001
         logger.exception("generate_node failed to build change set for project %s",
                           state.get("projectId"))

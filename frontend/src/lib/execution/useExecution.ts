@@ -25,6 +25,7 @@ import {
   type StreamEvent,
 } from "@/lib/api";
 import type { ExecutionState, RunResult } from "@/types/domain";
+import type { ChangeFile, ConversationTurn } from "@/types/intent";
 import {
   type ApprovalGateKind,
   type ExecutionSnapshot,
@@ -54,7 +55,11 @@ export interface UseExecutionApi {
   error?: string;
   /** 当前阶段文案（流式时为真实节点 label；回退时为静态文案）。 */
   phaseLabel?: string;
-  submitIntent: (text: string) => void;
+  /** 提交意图；可带多轮上下文（history）与已有文件基线（priorChangeSet）。 */
+  submitIntent: (
+    text: string,
+    ctx?: { history?: ConversationTurn[]; priorChangeSet?: ChangeFile[] }
+  ) => void;
   approvePlan: () => void;
   approveDiff: () => void;
   reject: () => void;
@@ -93,7 +98,10 @@ export function useExecution({
 
   // 提交意图：优先 SSE 流，逐节点更新进度，停在 plan gate；流失败回退 POST。
   const submitIntent = useCallback(
-    (text: string) => {
+    (
+      text: string,
+      ctx?: { history?: ConversationTurn[]; priorChangeSet?: ChangeFile[] }
+    ) => {
       const trimmed = text.trim();
       if (trimmed.length === 0 || inFlightRef.current) return;
 
@@ -110,6 +118,10 @@ export function useExecution({
         projectId,
         ...(repoPath !== undefined ? { repoPath } : {}),
         ...(sessionId !== undefined ? { sessionId } : {}),
+        ...(ctx?.history && ctx.history.length > 0 ? { history: ctx.history } : {}),
+        ...(ctx?.priorChangeSet && ctx.priorChangeSet.length > 0
+          ? { priorChangeSet: ctx.priorChangeSet }
+          : {}),
       };
 
       let sawResult = false;
@@ -157,7 +169,7 @@ export function useExecution({
 
   // 回退：非流式 POST 提交意图。
   const submitViaPost = useCallback(
-    (trimmed: string, gen: number, req: { intent: string; projectId: string; repoPath?: string }) => {
+    (trimmed: string, gen: number, req: import("@/types/intent").IntentRequest) => {
       // 若 SSE 已收到 run 帧后才失败，runIdRef 持有那个 run 的 id；POST 会新建独立 run，
       // 故先清空，让 .then 用 POST 返回的新 runId。代价：SSE 那次的 checkpoint 在运行时
       // MemorySaver 中成为孤儿（不落盘、随进程重启回收）——可接受，已知限制。

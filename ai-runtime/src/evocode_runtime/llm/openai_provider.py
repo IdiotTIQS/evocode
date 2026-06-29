@@ -44,21 +44,21 @@ class OpenAiLlmProvider(LlmGateway):
             id="task-1", title="实现变更", kind="generic",
             description=f"[openai:{self.model}] 实现意图：{intent}")]
 
-    def plan(self, intent: str, context: dict) -> list[EngineeringTask]:
+    def plan(self, intent: str, context: dict, history: list | None = None) -> list[EngineeringTask]:
         stats = (context or {}).get("stats") or {}
         user_msg = (f"意图：{intent}\n"
                     f"项目现状：{stats.get('fileCount', 0)} 文件 / "
                     f"{stats.get('componentCount', 0)} 组件。")
         try:
+            messages = [{"role": "system", "content": self._system_prompt()}]
+            messages.extend(self._history_messages(history))
+            messages.append({"role": "user", "content": user_msg})
             resp = httpx.post(
                 f"{self.base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
                     "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": self._system_prompt()},
-                        {"role": "user", "content": user_msg},
-                    ],
+                    "messages": messages,
                     "temperature": 0,
                 },
                 timeout=30.0,
@@ -114,8 +114,25 @@ class OpenAiLlmProvider(LlmGateway):
             s = "\n".join(lines)
         return s.strip() + "\n"
 
-    def generate_code(self, task: dict, intent: str, note: dict | None) -> str | None:
-        """用 LLM 为单个任务生成完整文件内容；任何异常/空 → 返回 None 让调用方回退模板。"""
+    @staticmethod
+    def _history_messages(history: list | None) -> list[dict]:
+        """把会话历史（{role,text}）转成 chat 消息，role=agent→assistant。
+
+        只取最近若干轮、截断每条长度，避免 prompt 过长。"""
+        msgs: list[dict] = []
+        for turn in (history or [])[-12:]:
+            role = "assistant" if turn.get("role") == "agent" else "user"
+            text = (turn.get("text") or "")[:2000]
+            if text:
+                msgs.append({"role": role, "content": text})
+        return msgs
+
+    def generate_code(self, task: dict, intent: str, note: dict | None,
+                      history: list | None = None,
+                      existing: str | None = None) -> str | None:
+        """用 LLM 为单个任务生成完整文件内容；任何异常/空 → 返回 None 让调用方回退模板。
+
+        history：多轮对话上下文；existing：该文件上一轮内容（提供则要求在其基础上迭代修改）。"""
         kind = task.get("kind", "generic")
         notes_txt = ""
         if note:
@@ -130,22 +147,31 @@ class OpenAiLlmProvider(LlmGateway):
             if constraints:
                 parts.append("约束：" + "；".join(constraints))
             notes_txt = "\n".join(parts)
+        if existing:
+            edit_instr = (
+                "这是该文件【当前内容】，请在其基础上按本次意图做最小必要修改，"
+                "输出修改后的【完整文件】（不是 diff）：\n"
+                f"```\n{existing[:6000]}\n```\n"
+            )
+        else:
+            edit_instr = "这是一个新文件。\n"
         user_msg = (
             f"意图：{intent}\n"
             f"任务：[{kind}] {task.get('title')} — {task.get('description', '')}\n"
             f"{notes_txt}\n"
+            f"{edit_instr}"
             "请输出实现该任务的单个文件的完整代码。"
         )
         try:
+            messages = [{"role": "system", "content": self._codegen_system_prompt(kind)}]
+            messages.extend(self._history_messages(history))
+            messages.append({"role": "user", "content": user_msg})
             resp = httpx.post(
                 f"{self.base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
                     "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": self._codegen_system_prompt(kind)},
-                        {"role": "user", "content": user_msg},
-                    ],
+                    "messages": messages,
                     "temperature": 0,
                     # 推理模型（如 deepseek-v4-pro）先耗 reasoning tokens 再出 content，
                     # 留足额度，否则 content 可能为空。

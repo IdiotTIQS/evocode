@@ -1,29 +1,30 @@
 "use client";
 // frontend/src/components/session/SessionCenter.tsx
-// 中栏（主交互）：当前 session 标题 + 意图输入 + 审批门状态机驱动的执行流。
+// 中栏（主交互）：多轮对话式编码工作区。
 //
-// 本任务用 useExecution 替换 Task 6 的直接 submitIntent：
-//   提交意图 → planning →【真实暂停】plan gate（后端在 generate 前中断，磁盘零写入）
-//   批准计划 → coding（resume 生成 changeSet）→ diff gate（仍未落盘）
-//   批准 diff → reviewing（resume 落盘）→ completed（渲染 ResultTabs）。
-// PipelineStepper 通过 mapStateToStepper 把 ExecutionState 映射到现有 phase
-// 字符串（不改 PipelineStepper，保持 Run 详情页复用）。
-import { useEffect, useRef, useState } from "react";
+// 这是一个【聊天流】：历史消息以气泡呈现（user/agent），当前轮的流水线进度 / 审批门 /
+// 结果作为对话流里的内联卡片；底部输入框【随时可追问】，不再一次性锁死。
+//
+// 多轮上下文：提交意图时携带本会话已有消息（history）与最近一次运行的 changeSet
+// （priorChangeSet）——后端据此让 LLM 接续对话并在已有文件基础上迭代修改。
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CornerDownLeft, Loader2 } from "lucide-react";
 
 import { useExecution } from "@/lib/execution/useExecution";
 import { mapStateToStepper } from "@/lib/execution/executionMachine";
 import { appendMessage } from "@/lib/stores/sessionStore";
-import type { RunResult, Session } from "@/types/domain";
+import type { RunResult, Session, SessionMessage } from "@/types/domain";
+import type { ConversationTurn } from "@/types/intent";
 import { PipelineStepper } from "@/components/console/PipelineStepper";
 import { ResultTabs } from "@/components/console/ResultTabs";
 import { ApprovalGate } from "@/components/session/ApprovalGate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-// 会话消息为「记录」语义，对主流程非关键路径：fire-and-forget，吞掉网络错误避免
-// 未处理 rejection（消息落库失败不应打断意图/审批操作）。
+// 会话消息为「记录」语义，fire-and-forget，吞掉网络错误避免未处理 rejection。
 function logMessage(
   sessionId: string,
   msg: Parameters<typeof appendMessage>[1]
@@ -31,16 +32,43 @@ function logMessage(
   void appendMessage(sessionId, msg).catch(() => {});
 }
 
+function ChatBubble({ message }: { message: SessionMessage }) {
+  const isUser = message.role === "user";
+  return (
+    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+      <div
+        className={cn(
+          "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
+          isUser
+            ? "rounded-br-sm bg-primary text-primary-foreground"
+            : "rounded-bl-sm bg-muted text-foreground"
+        )}
+      >
+        {!isUser ? (
+          <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {message.kind === "result" ? "结果" : "EvoCode"}
+          </span>
+        ) : null}
+        <p className="whitespace-pre-wrap break-words">{message.text}</p>
+      </div>
+    </div>
+  );
+}
+
 export function SessionCenter({
   session,
   projectId,
   repoPath,
+  messages,
+  latestResult,
   onResult,
   className,
 }: {
   session: Session;
   projectId: string;
   repoPath?: string;
+  messages: SessionMessage[];
+  latestResult: RunResult | null;
   onResult: (result: RunResult) => void;
   className?: string;
 }) {
@@ -51,8 +79,8 @@ export function SessionCenter({
     ...(repoPath !== undefined ? { repoPath } : {}),
   });
 
-  // 防止 completed 时重复回调/记录。
   const completedRunRef = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const trimmed = intent.trim();
   const isIdle = exec.state === "queued" || exec.state === "failed";
@@ -61,7 +89,24 @@ export function SessionCenter({
     exec.state === "coding" ||
     exec.state === "testing" ||
     exec.state === "reviewing";
+  const isBusy = isRunning || exec.state === "waiting_approval";
   const canSubmit = trimmed.length > 0 && isIdle;
+
+  // 多轮上下文：把已落库的消息转成对话历史；最近一次 run 的 changeSet 作为迭代基线。
+  const history: ConversationTurn[] = useMemo(
+    () => messages.map((m) => ({ role: m.role, text: m.text })),
+    [messages]
+  );
+  const priorChangeSet = useMemo(
+    () => latestResult?.changeSet ?? [],
+    [latestResult]
+  );
+
+  // 新消息 / 进度变化时滚到底部。
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, exec.state, exec.phaseLabel]);
 
   // completed：记录消息 + 回传结果（仅一次）。
   useEffect(() => {
@@ -71,13 +116,17 @@ export function SessionCenter({
       completedRunRef.current !== exec.result.runId
     ) {
       completedRunRef.current = exec.result.runId;
+      const r = exec.result;
+      const applied = r.appliedFiles?.length ?? 0;
       logMessage(session.id, {
         role: "agent",
         kind: "result",
-        text: `运行完成：${exec.result.phase}`,
-        runId: exec.result.runId,
+        text: `已完成：生成 ${r.changeSet?.length ?? 0} 个文件${
+          applied ? `，应用 ${applied} 个` : ""
+        }。可继续追问以迭代修改。`,
+        runId: r.runId,
       });
-      onResult(exec.result);
+      onResult(r);
     }
   }, [exec.state, exec.result, session.id, onResult]);
 
@@ -98,7 +147,9 @@ export function SessionCenter({
     if (!canSubmit) return;
     completedRunRef.current = null;
     logMessage(session.id, { role: "user", kind: "intent", text: trimmed });
-    exec.submitIntent(trimmed);
+    // 带上多轮上下文（已有对话 + 上一轮生成的文件）。
+    exec.submitIntent(trimmed, { history, priorChangeSet });
+    setIntent("");
   }
 
   function handleApprovePlan() {
@@ -130,71 +181,119 @@ export function SessionCenter({
 
   const stepper = mapStateToStepper(exec.state, exec.gate);
   const showPipeline = exec.state !== "queued" && exec.state !== "failed";
+  const isFirstTurn = messages.length === 0;
 
   return (
     <section
-      className={cn("flex min-w-0 flex-col gap-6", className)}
+      className={cn("flex min-w-0 flex-col", className)}
       aria-label="会话交互"
     >
-      <div className="space-y-1">
-        <h1 className="truncate text-2xl font-semibold">{session.title}</h1>
-        <p className="text-sm text-muted-foreground">
-          描述你想要的改动。提交后会先生成计划，批准后才会执行代码生成。
+      <div className="mb-3 space-y-0.5">
+        <h1 className="truncate text-xl font-semibold">{session.title}</h1>
+        <p className="text-xs text-muted-foreground">
+          多轮对话式编码：描述需求 → 审批计划 → 审批变更落盘。可在结果上继续追问迭代。
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <Textarea
-          aria-label="意图"
-          value={intent}
-          onChange={(e) => setIntent(e.target.value)}
-          placeholder="例如：给用户表新增分页接口并补充测试"
-          rows={4}
-          disabled={!isIdle}
-          className="resize-y"
-        />
-        <div className="flex justify-end">
-          <Button type="submit" disabled={!canSubmit}>
-            {isRunning || exec.state === "waiting_approval"
-              ? "进行中…"
-              : "提交意图"}
+      {/* 对话流 */}
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-3 overflow-y-auto rounded-lg border bg-card/40 p-4"
+      >
+        {isFirstTurn && exec.state === "queued" ? (
+          <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center">
+            <p className="text-sm font-medium">开始对话</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              例如「做一个联系表单页面，含姓名和邮箱」。生成后可继续说「再加个手机号字段」来迭代。
+            </p>
+          </div>
+        ) : null}
+
+        {messages.map((m) => (
+          <ChatBubble key={m.id} message={m} />
+        ))}
+
+        {/* 当前轮的进度 / 审批门 / 结果——作为 agent 侧的内联卡片 */}
+        {showPipeline ? (
+          <div className="flex justify-start">
+            <div className="w-full max-w-[95%] space-y-4 rounded-2xl rounded-bl-sm border bg-background p-4">
+              <PipelineStepper phase={stepper.phase} done={stepper.done} />
+
+              {exec.phaseLabel ? (
+                <p
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  aria-live="polite"
+                >
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  {exec.phaseLabel}
+                </p>
+              ) : null}
+
+              {exec.state === "waiting_approval" && exec.gate ? (
+                <ApprovalGate
+                  gate={exec.gate}
+                  {...(exec.plan !== undefined ? { plan: exec.plan } : {})}
+                  {...(exec.result !== undefined ? { result: exec.result } : {})}
+                  onApprove={
+                    exec.gate === "plan" ? handleApprovePlan : handleApproveDiff
+                  }
+                  onReject={handleReject}
+                />
+              ) : null}
+
+              {exec.state === "completed" && exec.result ? (
+                <ResultTabs result={exec.result} />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* 输入框：随时可追问（仅在途时禁用，避免并发提交） */}
+      <form onSubmit={handleSubmit} className="mt-3 space-y-2">
+        <div className="relative">
+          <Textarea
+            aria-label="消息"
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSubmit(e as unknown as React.FormEvent);
+              }
+            }}
+            placeholder={
+              isFirstTurn
+                ? "描述你想要的改动…"
+                : "继续追问以迭代，例如：再加一个手机号字段"
+            }
+            rows={3}
+            disabled={isBusy}
+            className="resize-y pr-28"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!canSubmit}
+            className="absolute bottom-2 right-2"
+          >
+            {isBusy ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                进行中
+              </>
+            ) : (
+              <>
+                发送
+                <CornerDownLeft className="size-3.5" aria-hidden="true" />
+              </>
+            )}
           </Button>
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          ⌘/Ctrl + Enter 发送。{isBusy ? "当前轮进行中，完成或处理审批后可继续。" : ""}
+        </p>
       </form>
-
-      {showPipeline ? (
-        <div className="space-y-6">
-          <PipelineStepper phase={stepper.phase} done={stepper.done} />
-
-          {/* 阶段文案（请求在途时显示，由真实后端往返驱动）。 */}
-          {exec.phaseLabel ? (
-            <p
-              className="text-sm text-muted-foreground motion-safe:animate-pulse"
-              aria-live="polite"
-            >
-              {exec.phaseLabel}
-            </p>
-          ) : null}
-
-          {/* 审批门：waiting_approval 时按 gate 渲染计划/diff 审批面板。 */}
-          {exec.state === "waiting_approval" && exec.gate ? (
-            <ApprovalGate
-              gate={exec.gate}
-              {...(exec.plan !== undefined ? { plan: exec.plan } : {})}
-              {...(exec.result !== undefined ? { result: exec.result } : {})}
-              onApprove={
-                exec.gate === "plan" ? handleApprovePlan : handleApproveDiff
-              }
-              onReject={handleReject}
-            />
-          ) : null}
-
-          {/* completed：完整结果。 */}
-          {exec.state === "completed" && exec.result ? (
-            <ResultTabs result={exec.result} />
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

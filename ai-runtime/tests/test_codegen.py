@@ -26,7 +26,7 @@ def test_backend_task_generates_java():
 def test_uses_llm_content_when_gateway_provides(monkeypatch):
     """gateway.generate_code 返回真实代码时，codegen 用 LLM 产物（而非模板），路径仍由模板决定。"""
     real_code = "// real LLM output\nexport function Contact() { return <form/>; }\n"
-    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note: real_code)
+    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note, history, existing: real_code)
     tasks = [{"id": "task-1", "title": "Contact", "kind": "frontend", "description": "form"}]
     files = generate_change_set(tasks, "add contact")
     assert files[0]["content"] == real_code           # 用了 LLM 产物
@@ -36,11 +36,34 @@ def test_uses_llm_content_when_gateway_provides(monkeypatch):
 
 def test_falls_back_to_template_when_llm_returns_none(monkeypatch):
     """gateway 返回 None（stub/失败）时，回退确定性模板，保证不失败。"""
-    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note: None)
+    monkeypatch.setattr(generator, "_try_llm_code", lambda task, intent, note, history, existing: None)
     tasks = [{"id": "task-1", "title": "Contact", "kind": "frontend", "description": "form"}]
     files = generate_change_set(tasks, "add contact")
     assert "export default" in files[0]["content"]     # 模板特征
     assert files[0]["path"].endswith(".tsx")
+
+
+def test_prior_change_set_passed_as_existing_baseline(monkeypatch):
+    """迭代编辑：prior 中同 path 的内容作为 existing 基线传给 LLM。"""
+    seen = {}
+
+    def capture(task, intent, note, history, existing):
+        seen["existing"] = existing
+        seen["history"] = history
+        return "// edited\nexport default function Feature(){return null}\n"
+
+    monkeypatch.setattr(generator, "_try_llm_code", capture)
+    # 先求模板会落到的 path，再用同 path 构造 prior
+    base = generator.generate_files_for_task(
+        {"id": "task-1", "title": "Feature", "kind": "frontend", "description": "x"}, "x")
+    path = base[0]["path"]
+    prior = [{"path": path, "content": "export default function Feature(){return <form/>}"}]
+    history = [{"role": "user", "text": "上一轮做了表单"}]
+    tasks = [{"id": "task-1", "title": "Feature", "kind": "frontend", "description": "加手机号"}]
+    files = generate_change_set(tasks, "加手机号", history=history, prior=prior)
+    assert seen["existing"] == prior[0]["content"]      # 同 path → existing 基线
+    assert seen["history"] == history
+    assert files[0]["path"] == path                      # 覆盖同一文件（迭代编辑）
 
 
 def test_apply_writes_only_under_generated_dir():

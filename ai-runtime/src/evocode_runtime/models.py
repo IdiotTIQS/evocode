@@ -1,5 +1,11 @@
 from typing import Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+
+class ConversationTurn(BaseModel):
+    """一轮历史消息（多轮对话上下文）。"""
+    role: str  # "user" | "agent"
+    text: str
 
 
 class IntentRequest(BaseModel):
@@ -9,6 +15,18 @@ class IntentRequest(BaseModel):
     repo_path: str | None = Field(default=None, alias="repoPath")
     # 控制平面层的会话关联；运行时不消费，仅声明以使契约显式（避免 payload 漂移被静默吞掉）。
     session_id: str | None = Field(default=None, alias="sessionId")
+    # 多轮对话：本会话此前的消息历史，供 plan/generate 接续上下文。
+    history: list[ConversationTurn] = Field(default_factory=list)
+    # 迭代编辑：本会话已生成的文件（{path, content}），供 generate 在其基础上改写。
+    prior_change_set: list["ChangeFile"] = Field(
+        default_factory=list, alias="priorChangeSet")
+
+    # 控制平面可能传 null（Java 的 null List）——统一归一化为空列表，避免 422。
+    @field_validator("history", "prior_change_set", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v):
+        return v or []
+
 
 
 class EngineeringTask(BaseModel):
@@ -102,3 +120,7 @@ class RunResult(BaseModel):
     review: "ReviewOutput | None" = Field(default=None)
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+# IntentRequest 前向引用了下方定义的 ChangeFile，显式 rebuild 以解析。
+IntentRequest.model_rebuild()

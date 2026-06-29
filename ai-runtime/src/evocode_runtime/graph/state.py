@@ -5,6 +5,8 @@ class RunState(TypedDict):
     intent: str
     projectId: str
     repoPath: str  # 空串表示未提供
+    history: list  # list[dict]: {role, text} 多轮对话历史
+    priorChangeSet: list  # list[dict]: {path, content} 本会话已有文件（迭代编辑基线）
     context: dict
     phase: str
     tasks: list  # list[dict]，序列化的 EngineeringTask
